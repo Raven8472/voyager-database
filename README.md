@@ -88,7 +88,8 @@ docs/ERD/ERD_DESCRIPTION.md
 
 The complete ERD for the current schema is included here:
 
-docs/ERD/ERD.png
+![Voyager Database ERD](docs/ERD/ERD.png)
+
 
 
 
