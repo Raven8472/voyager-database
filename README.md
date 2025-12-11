@@ -1,121 +1,170 @@
-# voyager-database
-🌌 Star Trek Voyager Database (LCARS-Themed API Project)
+# voyager-database  
+Star Trek Voyager Database (LCARS-Themed Project)
 
-This repository contains a fully structured Star Trek Voyager–inspired relational database, designed for interactive applications, LCARS-themed UIs, and future API development.
-The goal is to provide a clean, normalized, game-ready dataset that reflects the inner workings of a Federation starship — including crew information, replicator usage, transporter logs, and more.
+This repository contains a fully structured Star Trek Voyager–inspired relational database, designed for interactive applications, LCARS-themed user interfaces, and future API development.  
+The project provides a clean, normalized, game-ready dataset that reflects the inner workings of a Federation starship, including crew information, ship compartments, replicator systems, transporter activity, and medical records.
 
-This project is being built gradually into a full backend system that powers a text-RPG, UI dashboard, or investigative toolkit.
+The database currently includes a complete schema and an initial reference data set, and is being expanded gradually into a full backend system suitable for a text-based RPG, UI dashboard, or investigative toolkit.
 
-🚀 Project Goals
-✔ Build a normalized SQL database inspired by the USS Voyager
-✔ Support log-driven gameplay and queries
-✔ Create LCARS-style front-end for interacting with the data
-✔ Develop REST API endpoints to access the Voyager DB
-✔ Maintain clear, documented schema & ERD for all tables
-🗂 Repository Structure
+---
+
+## Project Goals
+
+- Build a normalized SQL database inspired by the USS Voyager  
+- Support log-driven gameplay, queries, and system simulation  
+- Enable future LCARS-style front-end interaction  
+- Provide a foundation for REST API access  
+- Maintain a clearly documented schema and ERD  
+
+---
+
+## Repository Structure
+
 voyager-database/
 │
 ├── docs/
-│   ├── ERD/
-│   │   ├── voyager_erd_v1.png
-│   │   ├── ERD_DESCRIPTION.md
-│   │   ├── Screenshot_*.png
-│   │   └── (diagram exports)
-│   └── roadmap.md
+│ ├── ERD/
+│ │ ├── voyager_erd_v1.png
+│ │ ├── ERD_DESCRIPTION.md
+│ │ ├── Screenshot_*.png
+│ │ └── diagram exports
+│ └── roadmap.md
+│
+├── sql/
+│ ├── schema/
+│ │ └── v1/
+│ │ └── voyager_schema.sql
+│ └── seed/
+│ └── voyager_reference_data.sql
 │
 ├── LICENSE
 └── README.md
 
-🧬 Current Core Database Schema
+markdown
+Copy code
 
-The database supports the following core systems:
+---
 
-👥 Crew System
+## Current Core Database Schema
 
-Master crew roster with human & alien species
+The database currently supports the following core systems.
 
-Rank table with standardized Starfleet ranks
+### Crew System
+- Master crew roster supporting human and alien species  
+- Department-based assignment and role structure  
+- Service numbers and designations  
+- Former crew tracking for transfers or departures  
 
-Department table for assignment & role clarity
+### Ship Compartment System
+- Detailed compartment location codes  
+- Named compartments with functional designations  
+- Centralized location reference used by ship systems  
 
-Former crew table for transfers, casualties, or departures
+### Replicator System
+- Replicator units with access levels and locations  
+- Replicator patterns and energy usage  
+- Replicator usage logging  
 
-🍽 Replicator System
+### Transporter System
+- Transporter units mapped to ship compartments  
+- Transportable entity definitions  
+- Transporter logs for personnel and cargo movement  
 
-Replicator Units (type, location, access level)
+### Shuttle System
+- Shuttle registry with service status and location tracking  
 
-Replicator Patterns (foods, beverages, alien dishes)
+### Medical System
+- Medical profiles linked to crew members  
+- Medical records for sickbay visits and treatments  
 
-Replicator Log (who used what & when)
+Some earlier experimental tables have been retired to keep the schema focused and maintainable.
 
-🌀 Transporter System
+A detailed explanation of each table is provided in:
 
-Transporter Units (shuttlebay, sickbay, cargo Bay)
+docs/ERD/ERD_DESCRIPTION.md
 
-Transporter Log (crew transports, cargo transports)
+yaml
+Copy code
 
-Transportable Entity table (patterns/items transported)
+---
 
-🚀 Shuttle System
+## Entity Relationship Diagram (ERD)
 
-Shuttle registry (type, service dates, status)
+The complete ERD for the current schema is included here:
 
-🧼 Medical System
+docs/ERD/voyager_erd_v1.png
 
-Medical profiles (baseline attributes)
+yaml
+Copy code
 
-Medical records (sickbay events, stardates)
+This diagram reflects the full normalized structure of the database as implemented.
 
-(Other retired tables removed for simplicity and future expansion.)
+---
 
-A detailed explanation of each table is provided here:
-👉 docs/ERD/ERD_DESCRIPTION.md
+## Reference Data
 
-📊 Entity Relationship Diagram (ERD)
+This repository includes a starter data pack containing:
+- Initial crew roster (including Season 1 personnel)
+- Departments
+- Ship compartments with realistic location codes
 
-The complete ERD is included in:
+The reference data is provided in:
 
-👉 docs/ERD/Screenshot 2025-11-29 140738.png
+sql/seed/voyager_reference_data.sql
 
-This image reflects the entire normalized schema used by the project.
+yaml
+Copy code
 
-⏳ Project Roadmap
+This allows the database to be recreated with meaningful data rather than empty tables.
 
-See:
-👉 docs/roadmap.md
+---
 
-Current active tasks:
+## Project Roadmap
 
-Finalize schema & clean legacy tables
+The current development roadmap is documented in:
 
-Add reference data (starter patterns, crew, departments)
+docs/roadmap.md
 
-Define API folder structure
+yaml
+Copy code
 
-Build LCARS UI layout
+Active and upcoming work includes:
+- Final schema validation and cleanup  
+- API structure definition  
+- LCARS-style UI layout planning  
+- Backend and frontend technology selection  
 
-Create backend + front-end tech stack plan
+---
 
-🔧 Technologies (Planned)
-Layer	Tooling
-Database	MySQL 8
-API	Node/Express or Python/FastAPI (TBD)
-UI	LCARS-themed HTML/CSS/React
-Tools	VS Code, SQLTools, GitHub Projects
-🤝 Contributions
+## Technologies
 
-This is a personal development and worldbuilding project.
-Contributions, issues, and suggestions are welcome — especially regarding schema design & LCARS UI ideas.
+| Layer     | Tooling |
+|----------|---------|
+| Database | MySQL 8 |
+| API      | Node/Express or Python/FastAPI (TBD) |
+| UI       | LCARS-themed HTML/CSS/React |
+| Tools    | VS Code, SQLTools, GitHub Projects |
 
-📜 License
+---
+
+## Contributions
+
+This is a personal development and worldbuilding project.  
+Issues, suggestions, and design feedback are welcome, particularly around schema design and LCARS-style UI concepts.
+
+---
+
+## License
 
 MIT License — free to use and modify.
 
-⭐ Final Notes
+---
 
-This project aims to feel like:
+## Final Notes
 
-“If Starfleet had an official database system for Voyager.”
+This project is designed to answer the question:
 
-Everything — from replicator logs to crew rosters — is designed to fit canon, gameplay goals, and a clean engineering approach.
+> *If Starfleet maintained an official database system for Voyager, what would it look like?*
+
+All systems are modeled with a focus on canonical plausibility, gameplay utility, and clean engineering.
 
