@@ -40,8 +40,6 @@ voyager-database/
 ├── LICENSE
 └── README.md
 
-markdown
-Copy code
 
 ---
 
@@ -83,8 +81,6 @@ A detailed explanation of each table is provided in:
 
 docs/ERD/ERD_DESCRIPTION.md
 
-yaml
-Copy code
 
 ---
 
@@ -92,10 +88,9 @@ Copy code
 
 The complete ERD for the current schema is included here:
 
-docs/ERD/voyager_erd_v1.png
+docs/ERD/ERD.png
 
-yaml
-Copy code
+
 
 This diagram reflects the full normalized structure of the database as implemented.
 
@@ -112,8 +107,7 @@ The reference data is provided in:
 
 sql/seed/voyager_reference_data.sql
 
-yaml
-Copy code
+
 
 This allows the database to be recreated with meaningful data rather than empty tables.
 
@@ -125,8 +119,7 @@ The current development roadmap is documented in:
 
 docs/roadmap.md
 
-yaml
-Copy code
+
 
 Active and upcoming work includes:
 - Final schema validation and cleanup  
