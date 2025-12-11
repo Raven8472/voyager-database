@@ -1,7 +1,8 @@
 # voyager-database  
 Star Trek Voyager Database (LCARS-Themed Project)
 
-This repository contains a fully structured Star Trek Voyager–inspired relational database, designed for interactive applications, LCARS-themed user interfaces, and future API development.  
+This repository contains a fully structured Star Trek Voyager–inspired relational database designed for interactive applications, LCARS-themed user interfaces, and future API development.
+
 The project provides a clean, normalized, game-ready dataset that reflects the inner workings of a Federation starship, including crew information, ship compartments, replicator systems, transporter activity, and medical records.
 
 The database currently includes a complete schema and an initial reference data set, and is being expanded gradually into a full backend system suitable for a text-based RPG, UI dashboard, or investigative toolkit.
@@ -21,10 +22,9 @@ The database currently includes a complete schema and an initial reference data 
 ## Repository Structure
 
 voyager-database/
-│
 ├── docs/
 │ ├── ERD/
-│ │ ├── voyager_erd_v1.png
+│ │ ├── ERD.png
 │ │ ├── ERD_DESCRIPTION.md
 │ │ ├── Screenshot_*.png
 │ │ └── diagram exports
@@ -78,20 +78,15 @@ The database currently supports the following core systems.
 Some earlier experimental tables have been retired to keep the schema focused and maintainable.
 
 A detailed explanation of each table is provided in:
-
 docs/ERD/ERD_DESCRIPTION.md
-
 
 ---
 
 ## Entity Relationship Diagram (ERD)
 
-The complete ERD for the current schema is included here:
+The complete Entity Relationship Diagram for the current schema is shown below.
 
 ![Voyager Database ERD](docs/ERD/ERD.png)
-
-
-
 
 This diagram reflects the full normalized structure of the database as implemented.
 
@@ -100,14 +95,12 @@ This diagram reflects the full normalized structure of the database as implement
 ## Reference Data
 
 This repository includes a starter data pack containing:
-- Initial crew roster (including Season 1 personnel)
-- Departments
-- Ship compartments with realistic location codes
+- Initial crew roster (including Season 1 personnel)  
+- Departments  
+- Ship compartments with realistic location codes  
 
 The reference data is provided in:
-
 sql/seed/voyager_reference_data.sql
-
 
 
 This allows the database to be recreated with meaningful data rather than empty tables.
@@ -117,9 +110,7 @@ This allows the database to be recreated with meaningful data rather than empty 
 ## Project Roadmap
 
 The current development roadmap is documented in:
-
 docs/roadmap.md
-
 
 
 Active and upcoming work includes:
@@ -161,4 +152,7 @@ This project is designed to answer the question:
 > *If Starfleet maintained an official database system for Voyager, what would it look like?*
 
 All systems are modeled with a focus on canonical plausibility, gameplay utility, and clean engineering.
+
+
+
 
