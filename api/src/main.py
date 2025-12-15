@@ -13,11 +13,14 @@ def get_db_connection():
         database=os.getenv("DB_NAME")
     )
 
-
 @app.get("/health")
 def health_check():
     return {"status": "ok"}
-# Crew Endpoints---------------------------------------------------------------------
+
+# =========================
+# Crew Endpoints
+# =========================
+
 @app.get("/crew")
 def get_crew():
     try:
@@ -50,8 +53,6 @@ def get_crew():
 
     except Exception as e:
         return {"error": str(e)}
-
-
 
 @app.get("/crew/{crew_id}")
 def get_crew_member(crew_id: int):
@@ -88,8 +89,10 @@ def get_crew_member(crew_id: int):
     except Exception as e:
         return {"error": str(e)}
 
+# =========================
+# Department Endpoints
+# =========================
 
-#Departments Endpoints-------------------------------------------------------------
 @app.get("/departments")
 def get_departments():
     try:
@@ -135,6 +138,45 @@ def get_department(department_id: int):
 
     except HTTPException:
         raise
+    except Exception as e:
+        return {"error": str(e)}
+
+# =========================
+# Joined / Composite Views
+# =========================
+
+@app.get("/crew-with-department")
+def get_crew_with_department():
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(pymysql.cursors.DictCursor)
+
+        cursor.execute("""
+            SELECT
+                c.crew_id,
+                c.first_name,
+                c.last_name,
+                c.crew_rank,
+                d.department_name
+            FROM crew c
+            LEFT JOIN departments d
+                ON c.department_id = d.department_id
+        """)
+
+        rows = cursor.fetchall()
+        conn.close()
+
+        result = []
+        for row in rows:
+            result.append({
+                "id": row["crew_id"],
+                "name": f'{row["first_name"]} {row["last_name"]}',
+                "rank": row["crew_rank"],
+                "department": row["department_name"]
+            })
+
+        return result
+
     except Exception as e:
         return {"error": str(e)}
 
