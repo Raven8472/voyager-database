@@ -17,7 +17,7 @@ def get_db_connection():
 @app.get("/health")
 def health_check():
     return {"status": "ok"}
-
+# Crew Endpoints---------------------------------------------------------------------
 @app.get("/crew")
 def get_crew():
     try:
@@ -89,6 +89,54 @@ def get_crew_member(crew_id: int):
         return {"error": str(e)}
 
 
+#Departments Endpoints-------------------------------------------------------------
+@app.get("/departments")
+def get_departments():
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(pymysql.cursors.DictCursor)
+
+        cursor.execute("""
+            SELECT
+                department_id,
+                department_name
+            FROM departments
+        """)
+
+        departments = cursor.fetchall()
+        conn.close()
+
+        return departments
+
+    except Exception as e:
+        return {"error": str(e)}
+
+@app.get("/departments/{department_id}")
+def get_department(department_id: int):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(pymysql.cursors.DictCursor)
+
+        cursor.execute("""
+            SELECT
+                department_id,
+                department_name
+            FROM departments
+            WHERE department_id = %s
+        """, (department_id,))
+
+        department = cursor.fetchone()
+        conn.close()
+
+        if not department:
+            raise HTTPException(status_code=404, detail="Department not found")
+
+        return department
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        return {"error": str(e)}
 
 
 
