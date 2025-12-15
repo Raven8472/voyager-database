@@ -35,6 +35,20 @@ def get_crew():
         }
     ]
 
+@app.get("/crew/{crew_id}")
+def get_crew_member(crew_id: int):
+    crew = [
+        {"id": 1, "name": "Crew Member A", "rank": "Unknown", "department": "Unassigned"},
+        {"id": 2, "name": "Crew Member B", "rank": "Unknown", "department": "Unassigned"},
+    ]
+
+    for member in crew:
+        if member["id"] == crew_id:
+            return member
+
+    return {"error": "Crew member not found"}
+
+
 
 @app.get("/test-db")
 def test_db():
