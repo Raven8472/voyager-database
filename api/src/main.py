@@ -1,6 +1,7 @@
 import os
 from fastapi import FastAPI
 import pymysql
+from fastapi import FastAPI, HTTPException
 
 app = FastAPI(title="Voyager API")
 
@@ -24,16 +25,32 @@ def get_crew():
         cursor = conn.cursor(pymysql.cursors.DictCursor)
 
         cursor.execute("""
-            SELECT id, name, rank, department
+            SELECT
+                crew_id,
+                first_name,
+                last_name,
+                crew_rank,
+                department_id
             FROM crew
         """)
 
-        crew = cursor.fetchall()
+        rows = cursor.fetchall()
         conn.close()
+
+        crew = []
+        for row in rows:
+            crew.append({
+                "id": row["crew_id"],
+                "name": f'{row["first_name"]} {row["last_name"]}',
+                "rank": row["crew_rank"],
+                "department_id": row["department_id"]
+            })
+
         return crew
 
     except Exception as e:
         return {"error": str(e)}
+
 
 
 @app.get("/crew/{crew_id}")
@@ -43,21 +60,35 @@ def get_crew_member(crew_id: int):
         cursor = conn.cursor(pymysql.cursors.DictCursor)
 
         cursor.execute("""
-            SELECT id, name, rank, department
+            SELECT
+                crew_id,
+                first_name,
+                last_name,
+                crew_rank,
+                department_id
             FROM crew
-            WHERE id = %s
+            WHERE crew_id = %s
         """, (crew_id,))
 
-        member = cursor.fetchone()
+        row = cursor.fetchone()
         conn.close()
 
-        if member:
-            return member
-        else:
-            return {"error": "Crew member not found"}
+        if not row:
+            raise HTTPException(status_code=404, detail="Crew member not found")
 
+        return {
+            "id": row["crew_id"],
+            "name": f'{row["first_name"]} {row["last_name"]}',
+            "rank": row["crew_rank"],
+            "department_id": row["department_id"]
+        }
+
+    except HTTPException:
+        raise
     except Exception as e:
         return {"error": str(e)}
+
+
 
 
 
