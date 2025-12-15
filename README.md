@@ -131,7 +131,117 @@ Active and upcoming work includes:
 | Tools    | VS Code, SQLTools, GitHub Projects |
 
 ---
+Voyager Database API (v0.1)
+Overview
 
+The Voyager Database API is a backend service built with FastAPI and MySQL that provides read-only access to structured data related to the starship Voyager. This project is designed as a learning-focused but production-minded backend system, emphasizing clean API design, database integration, and version-controlled development.
+
+Version v0.1 focuses on establishing a stable API foundation and core read-only endpoints.
+
+Technology Stack
+
+Python
+
+FastAPI
+
+MySQL
+
+PyMySQL
+
+Uvicorn
+
+Current Features (v0.1)
+
+Health check endpoint
+
+MySQL database connectivity using environment variables
+
+Read-only Crew API backed by the database
+
+No write operations (GET-only API)
+
+Available Endpoints
+Health
+GET /health
+
+
+Returns API status.
+
+Example response:
+
+{
+  "status": "ok"
+}
+
+Crew List
+GET /crew
+
+
+Returns a list of crew members from the database.
+
+Example response:
+
+[
+  {
+    "id": 1,
+    "name": "Crew Member A",
+    "rank": "LTJG",
+    "department": "Operations"
+  }
+]
+
+Crew Detail
+GET /crew/{id}
+
+
+Returns a single crew member by ID.
+
+Example error response:
+
+{
+  "error": "Crew member not found"
+}
+
+Setup (Local Development)
+Environment Variables
+
+The API requires the following environment variables to connect to MySQL:
+
+DB_HOST=localhost
+DB_USER=your_mysql_user
+DB_PASSWORD=your_mysql_password
+DB_NAME=Voyager_Database
+
+Run the API
+uvicorn main:app --reload
+
+
+Swagger UI will be available at:
+
+http://127.0.0.1:8000/docs
+
+Project Status
+
+API is functional and database-backed
+
+Read-only endpoints only
+
+No authentication implemented
+
+No frontend included in v0.1
+
+Roadmap (Next Steps)
+
+Frontend initialization (React)
+
+Crew list UI
+
+Frontend ↔ Backend integration
+
+Additional read-only endpoints
+
+Pagination and filtering
+---
 ## Contributions
 
 This is a personal development and worldbuilding project.  
