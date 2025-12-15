@@ -19,34 +19,45 @@ def health_check():
 
 @app.get("/crew")
 def get_crew():
-    # Temporary stub data — will be replaced with DB-backed query
-    return [
-        {
-            "id": 1,
-            "name": "Crew Member A",
-            "rank": "Unknown",
-            "department": "Unassigned"
-        },
-        {
-            "id": 2,
-            "name": "Crew Member B",
-            "rank": "Unknown",
-            "department": "Unassigned"
-        }
-    ]
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(pymysql.cursors.DictCursor)
+
+        cursor.execute("""
+            SELECT id, name, rank, department
+            FROM crew
+        """)
+
+        crew = cursor.fetchall()
+        conn.close()
+        return crew
+
+    except Exception as e:
+        return {"error": str(e)}
+
 
 @app.get("/crew/{crew_id}")
 def get_crew_member(crew_id: int):
-    crew = [
-        {"id": 1, "name": "Crew Member A", "rank": "Unknown", "department": "Unassigned"},
-        {"id": 2, "name": "Crew Member B", "rank": "Unknown", "department": "Unassigned"},
-    ]
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(pymysql.cursors.DictCursor)
 
-    for member in crew:
-        if member["id"] == crew_id:
+        cursor.execute("""
+            SELECT id, name, rank, department
+            FROM crew
+            WHERE id = %s
+        """, (crew_id,))
+
+        member = cursor.fetchone()
+        conn.close()
+
+        if member:
             return member
+        else:
+            return {"error": "Crew member not found"}
 
-    return {"error": "Crew member not found"}
+    except Exception as e:
+        return {"error": str(e)}
 
 
 
