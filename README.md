@@ -21,21 +21,33 @@ The database currently includes a complete schema and an initial reference data 
 
 ## Repository Structure
 
+```text
 voyager-database/
-├── docs/
-│ ├── ERD/
-│ │ ├── ERD.png
-│ │ ├── ERD_DESCRIPTION.md
-│ │ ├── Screenshot_*.png
-│ │ └── diagram exports
-│ └── roadmap.md
+├── api/                  # Python backend API (FastAPI-style structure)
+│   ├── src/
+│   │   ├── core/          # Configuration and core settings
+│   │   ├── database/      # Database connection and session handling
+│   │   ├── models/        # ORM / data models (in progress)
+│   │   ├── routes/        # API route modules (crew, systems, transporters, etc.)
+│   │   ├── utils/         # Shared helpers and utilities
+│   │   └── main.py        # API entry point
+│   ├── requirements.txt
+│   └── README.md
 │
-├── sql/
-│ ├── schema/
-│ │ └── v1/
-│ │ └── voyager_schema.sql
-│ └── seed/
-│ └── voyager_reference_data.sql
+├── frontend/             # React frontend (early-stage UI)
+│   ├── public/
+│   ├── src/
+│   ├── package.json
+│   └── README.md
+│
+├── docs/                 # Project documentation
+│   ├── ERD/               # Entity-Relationship Diagrams and design notes
+│   └── roadmap.md        # Project roadmap and milestones
+│
+├── sql/                  # Database definitions
+│   ├── schema/
+│   │   └── v1/            # Versioned schema files
+│   └── seed/              # Reference and seed data
 │
 ├── LICENSE
 └── README.md
