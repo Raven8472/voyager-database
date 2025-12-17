@@ -1,4 +1,10 @@
+from pathlib import Path
+from dotenv import load_dotenv
 import os
+
+BASE_DIR = Path(__file__).resolve().parents[1]  # points to /api
+load_dotenv(BASE_DIR / ".env")
+
 from fastapi import FastAPI
 import pymysql
 from fastapi import FastAPI, HTTPException
