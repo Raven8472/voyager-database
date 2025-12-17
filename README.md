@@ -20,7 +20,6 @@ The database currently includes a complete schema and an initial reference data 
 ---
 
 ## Repository Structure
-## Repository Structure
 
 ```text
 voyager-database/
