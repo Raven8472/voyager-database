@@ -8,31 +8,36 @@ This roadmap outlines the major milestones for the Voyager Database & API projec
 ## Milestones
 - M1: Database Schema Foundation
 - M2: Backend API MVP
-- M3: LCARS UI v1
-- M4: Full Integration + Deployment
+- M3: LCARS Portal V1
+- M4: V1 Release Cleanup and Push
+- M5: V2 Expansion
 
-## This Week's Delivery Target
+## V1 Status
 
-Primary goal: ship a playable `Records Officer Workstation` MVP that lets a user watch an episode and log official personnel changes into Voyager's database.
+The project has now reached a playable V1 state.
 
-### MVP Pillars
+Current shipped areas:
 
-- Crew directory with search and filtering
-- Crew dossier view with rank, department, designation, species, service number, and history
-- Personnel action logging for promotion, demotion, transfer, status change, commendation, and notes
-- LCARS-inspired workstation shell that feels like an in-universe terminal
+- Personnel workspace
+- Medical workspace
+- Transporter workspace
+- Replicator workspace
+- Holodeck workspace
+- Ship Systems workspace
+- Authenticated portal shell served from the API
 
-### Definition Of Done
+## V1 Definition Of Done
 
-- The database has a `personnel_actions` table for historical change tracking
-- The API can list crew, return a full dossier, and create a personnel action
-- The frontend can browse crew records and submit a personnel action
-- The current crew record updates after an action is filed
-- Recent personnel actions appear in a workstation summary panel
+- Base schema and user-data schema are documented and aligned
+- FastAPI serves both API routes and the production portal build
+- The portal supports authenticated record logging
+- Canon seed data and user-authored data can coexist cleanly
+- LCARS styling is strong enough for a V1 release candidate
 
-### Stretch Goals
+## V2 Candidates
 
-- Episode session tracking
-- Former crew workflows
-- Medical and transporter dossier tabs
-- Validation helpers for canon or timeline consistency
+- Decompose the large frontend app into workspace-specific modules
+- Revisit comments, response models, and API organization
+- Decide whether shuttle data stays catalog-only or becomes interactive
+- Tighten visual consistency on record-card states and subpanels
+- Add safer migration scripts for live schema updates

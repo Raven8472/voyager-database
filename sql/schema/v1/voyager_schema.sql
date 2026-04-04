@@ -117,6 +117,29 @@ CREATE TABLE `holodecks` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
+-- Table structure for table `holodeckusagelog`
+--
+
+DROP TABLE IF EXISTS `holodeckusagelog`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `holodeckusagelog` (
+  `UsageLogID` int NOT NULL AUTO_INCREMENT,
+  `CrewID` int NOT NULL,
+  `ProgramID` varchar(10) NOT NULL,
+  `HolodeckID` varchar(10) NOT NULL,
+  `Stardate` varchar(20) NOT NULL,
+  PRIMARY KEY (`UsageLogID`),
+  KEY `fk_holodeckusage_crew` (`CrewID`),
+  KEY `fk_holodeckusage_program` (`ProgramID`),
+  KEY `fk_holodeckusage_holodeck` (`HolodeckID`),
+  CONSTRAINT `fk_holodeckusage_crew` FOREIGN KEY (`CrewID`) REFERENCES `crew` (`crew_id`),
+  CONSTRAINT `fk_holodeckusage_program` FOREIGN KEY (`ProgramID`) REFERENCES `holodeckprograms` (`ProgramID`),
+  CONSTRAINT `fk_holodeckusage_holodeck` FOREIGN KEY (`HolodeckID`) REFERENCES `holodecks` (`HolodeckID`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
 -- Table structure for table `medicalprofile`
 --
 
@@ -250,49 +273,6 @@ CREATE TABLE `shuttles` (
   `notes` text,
   PRIMARY KEY (`shuttle_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
--- Table structure for table `transportableentity`
---
-
-DROP TABLE IF EXISTS `transportableentity`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
-CREATE TABLE `transportableentity` (
-  `EntityID` varchar(10) NOT NULL,
-  `EntityType` enum('Crew','Property','Cargo') NOT NULL,
-  `Description` text,
-  PRIMARY KEY (`EntityID`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
--- Table structure for table `transporterlog`
---
-
-DROP TABLE IF EXISTS `transporterlog`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
-CREATE TABLE `transporterlog` (
-  `TransporterLogID` int NOT NULL AUTO_INCREMENT,
-  `TransporterUnitID` varchar(10) NOT NULL,
-  `EntityID` varchar(10) NOT NULL,
-  `CrewID` int DEFAULT NULL,
-  `Stardate` varchar(20) NOT NULL,
-  `TransportDirection` enum('Inbound','Outbound') NOT NULL,
-  `DestinationCompartmentID` varchar(10) DEFAULT NULL,
-  `OffShipLocation` varchar(100) DEFAULT NULL,
-  PRIMARY KEY (`TransporterLogID`),
-  KEY `TransporterUnitID` (`TransporterUnitID`),
-  KEY `EntityID` (`EntityID`),
-  KEY `DestinationCompartmentID` (`DestinationCompartmentID`),
-  KEY `fk_transporter_crew` (`CrewID`),
-  CONSTRAINT `fk_transporter_crew` FOREIGN KEY (`CrewID`) REFERENCES `crew` (`crew_id`),
-  CONSTRAINT `transporterlog_ibfk_1` FOREIGN KEY (`TransporterUnitID`) REFERENCES `transporterunits` (`TransporterUnitID`),
-  CONSTRAINT `transporterlog_ibfk_2` FOREIGN KEY (`EntityID`) REFERENCES `transportableentity` (`EntityID`),
-  CONSTRAINT `transporterlog_ibfk_4` FOREIGN KEY (`DestinationCompartmentID`) REFERENCES `shipcompartments` (`CompartmentID`)
-) ENGINE=InnoDB AUTO_INCREMENT=13 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --

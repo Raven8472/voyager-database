@@ -103,6 +103,40 @@ CREATE TABLE IF NOT EXISTS user_replicator_logs (
         ON DELETE CASCADE
 );
 
+-- User-authored holodeck programs extend the base catalog without overwriting canon seed rows.
+CREATE TABLE IF NOT EXISTS user_holodeck_programs (
+    program_id INT NOT NULL AUTO_INCREMENT,
+    user_id INT NOT NULL,
+    program_name VARCHAR(100) NOT NULL,
+    holodeck_id VARCHAR(10) NOT NULL,
+    created_by VARCHAR(50) NULL,
+    access_level VARCHAR(20) NULL,
+    genre VARCHAR(30) NULL,
+    description TEXT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (program_id),
+    KEY idx_user_holodeck_programs_user_id (user_id),
+    CONSTRAINT fk_user_holodeck_programs_user
+        FOREIGN KEY (user_id) REFERENCES users (user_id)
+        ON DELETE CASCADE
+);
+
+-- User holodeck logs mirror the lean V1 activity model: crew, program, holodeck, stardate.
+CREATE TABLE IF NOT EXISTS user_holodeck_logs (
+    log_id INT NOT NULL AUTO_INCREMENT,
+    user_id INT NOT NULL,
+    crew_id INT NOT NULL,
+    program_id VARCHAR(20) NOT NULL,
+    holodeck_id VARCHAR(10) NOT NULL,
+    stardate VARCHAR(20) NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (log_id),
+    KEY idx_user_holodeck_logs_user_id (user_id),
+    CONSTRAINT fk_user_holodeck_logs_user
+        FOREIGN KEY (user_id) REFERENCES users (user_id)
+        ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS user_transporter_events (
     event_id INT NOT NULL AUTO_INCREMENT,
     user_id INT NOT NULL,
@@ -120,6 +154,7 @@ CREATE TABLE IF NOT EXISTS user_transporter_events (
         ON DELETE CASCADE
 );
 
+-- Ordered crew manifest for each logged transporter event.
 CREATE TABLE IF NOT EXISTS user_transporter_event_passengers (
     passenger_id INT NOT NULL AUTO_INCREMENT,
     event_id INT NOT NULL,

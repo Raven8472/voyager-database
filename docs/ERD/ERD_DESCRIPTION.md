@@ -1,325 +1,271 @@
-crew
-What it is Main manifest of everyone currently assigned to Voyager: names, rank text, stardate of birth (DOUBLE), planet of origin, species, designation (StarFleet / Maquis / Civilian), service number, and a FK to departments.
+# ERD Description
 
-voyager_database_dump
+This document explains the tables that matter to the current V1 portal and how they support the workstation loops.
 
-Key relationships
+## Base Reference Tables
 
-crew.department_id → departments.department_id
+### `crew`
 
-Player can
+Main manifest of people currently assigned to Voyager.
 
-Browse the full crew list.
+Key fields:
 
-Look up a specific person by name, rank, species, or department.
+- names
+- rank text
+- birth stardate
+- planet of origin
+- species
+- designation
+- service number
+- `department_id`
 
-Filter lists like “all Maquis in Engineering” or “all Vulcans on board.”
+Key relationship:
 
-Jump from a person’s dossier into their logs (replicator use, transporter events, medical, former crew record).
+- `crew.department_id -> departments.department_id`
 
-departments / department
-You currently have both a plural and a singular table in the dump; going forward we’ll treat departments as the canonical one and ignore/delete the older department copy.
+Supports:
 
-voyager_database_dump
+- crew directory browsing
+- dossier lookup by person
+- filtering by species, rank, department, or designation
 
-What it is Lookup table defining the ship’s major departments (Command, Operations, Engineering, Medical, Science, Security, etc.) with an integer PK.
+### `departments`
 
-Key relationships
+Lookup table for Command, Operations, Engineering, Medical, Security, and related ship departments.
 
-One department → many crew (crew.department_id)
+Key relationship:
 
-Department IDs can also be re-used by other tables later if you ever need that.
+- one department to many crew
 
-Player can
+Supports:
 
-Filter crew or logs “by department” (e.g., show only Security personnel).
+- directory filtering
+- department labeling across records
 
-See department headcount / quick stats (optional UI thing later).
+### `formercrew`
 
-formercrew
-What it is History of people who are no longer actively aboard: promotions off the ship, transfers, MIA/KIA, etc.
+History table for people no longer actively aboard.
 
-voyager_database_dump
+Key relationship:
 
-Key relationships
+- `formercrew.CrewID -> crew.crew_id`
 
-formercrew.CrewID → crew.crew_id (who it was)
+Supports:
 
-One crew member → zero or one former-crew record (at least in this schema).
+- dossier history
+- departure reason and reassignment notes
 
-Player can
+### `shipcompartments`
 
-Look up “where did this person end up?” for crew who left.
+Dictionary of modeled locations on Voyager.
 
-See reason/notes like “Transferred to Alpha Quadrant” or “KIA – Year of Hell” (once you add those columns).
+Key relationships:
 
-shipcompartments
-What it is Dictionary of all physically modeled locations on Voyager. Each row has a compartment code (CompartmentID like 4-050-1), a human-readable name, and an optional designation.
+- `replicatorunits.CompartmentID -> shipcompartments.CompartmentID`
+- `transporterunits.CompartmentID -> shipcompartments.CompartmentID`
+- `holodecks.CompartmentID -> shipcompartments.CompartmentID`
 
-voyager_database_dump
+Supports:
 
-Key relationships
+- Ship Systems browsing
+- location-aware equipment lookup
 
-replicatorunits.CompartmentID → shipcompartments.CompartmentID
+## Replicator Tables
 
-transporterunits.CompartmentID → shipcompartments.CompartmentID
+### `replicatorunits`
 
-holodecks.CompartmentID (if present in your earlier schema) → shipcompartments.CompartmentID
+Catalog of physical replicators and the compartments they live in.
 
-Shuttlebay compartments referenced by shuttles status/location text.
+### `replicatorpatterns`
 
-Player can
+Menu/catalog data for replicator output definitions.
 
-Browse a deck/section list and see what’s in that space (replicators, transporters, holodecks).
+### `replicatorlog`
 
-Filter logs “by location” — e.g., “all replicator use on Deck 2 Mess Hall.”
+Base canon-style replicator usage events.
 
-replicatorpatterns
-What it is The replicator menu library: Pattern ID, name, category (Food, Beverage, Dessert, etc.), origin species, energy cost, description, and last updated stardate.
+Key relationships:
 
-voyager_database_dump
+- `replicatorlog.CrewID -> crew.crew_id`
+- `replicatorlog.ReplicatorUnitID -> replicatorunits.ReplicatorUnitID`
+- `replicatorlog.PatternID -> replicatorpatterns.PatternID`
 
-Key relationships
+Supports:
 
-One pattern → many log entries in replicatorlog.
+- who ordered what
+- where it was replicated
+- pattern-level browsing
 
-Player can
+## Transporter Tables
 
-Browse available patterns like a menu (“show all coffees” / “show Vulcan dishes”).
+### `transporterunits`
 
-Inspect details such as origin species and energy cost.
+Catalog of transporter pads installed on Voyager.
 
-When viewing a replicator log entry, jump to the pattern’s flavor text.
+### `user_transporter_events`
 
-replicatorunits
-What it is Catalog of physical replicators: an ID like R-03-PQ2, type (Food / Multi-Function / Tool), access level (Crew Only / Guest / Restricted), and which compartment it lives in.
+Per-user transporter activity log used by the portal.
 
-voyager_database_dump
+Key relationship:
 
-Key relationships
+- `user_transporter_events.user_id -> users.user_id`
 
-replicatorunits.CompartmentID → shipcompartments.CompartmentID
+Stores:
 
-One unit → many rows in replicatorlog.
+- transporter unit
+- optional operator
+- stardate
+- direction
+- ship-side control location
+- optional off-ship location
 
-Player can
+### `user_transporter_event_passengers`
 
-See where replicators are on the ship and what kind they are.
+Ordered passenger manifest attached to one transporter event.
 
-Filter logs by unit (“what was ordered from the Mess Hall replicator yesterday?”).
+Key relationship:
 
-Filter by access level if you want: e.g., “show only Guest replicators.”
+- `user_transporter_event_passengers.event_id -> user_transporter_events.event_id`
 
-replicatorlog
-What it is Fact table of individual replicator uses: who (CrewID), which unit, which pattern, and when (Timestamp).
+Supports:
 
-voyager_database_dump
+- multi-person transporter logs
+- passenger order preservation
 
-Key relationships
+## Holodeck Tables
 
-replicatorlog.CrewID → crew.crew_id
+### `holodecks`
 
-replicatorlog.ReplicatorUnitID → replicatorunits.ReplicatorUnitID
+Physical holodeck bays, each tied to a ship compartment.
 
-replicatorlog.PatternID → replicatorpatterns.PatternID
+### `holodeckprograms`
 
-Player can
+Catalog of base programs with a home/origin holodeck, creator, access level, genre, and description.
 
-From a crew dossier: “What has Janeway replicated this week?”
+Key relationship:
 
-From a location: “What’s been coming out of the Mess Hall replicator?”
+- `holodeckprograms.HolodeckID -> holodecks.HolodeckID`
 
-From a pattern: “Who’s been ordering Raktajino lately?”
+### `holodeckusagelog`
 
-Run simple timeframe queries: “show all coffee orders between SD 48400–48410.” (No mystery-AI, just straight filters.)
+Base holodeck usage history.
 
-transportableentity
-What it is Lookup of “things that can be transported”: each entity has an ID string, a type enum (Crew, Property, Cargo), and a text description (“Captain Janeway’s luggage”, “Emergency rations”, etc.).
+Key relationships:
 
-voyager_database_dump
+- `holodeckusagelog.CrewID -> crew.crew_id`
+- `holodeckusagelog.ProgramID -> holodeckprograms.ProgramID`
+- `holodeckusagelog.HolodeckID -> holodecks.HolodeckID`
 
-Key relationships
+Supports:
 
-transporterlog.EntityID → transportableentity.EntityID
+- crew-level holodeck history
+- program popularity
+- comparisons between a program's home holodeck and where it was actually run
 
-Player can
+### `user_holodeck_programs`
 
-Browse the list of known transportable items.
+Per-user program catalog additions created from the Holodeck workspace.
 
-From a given entity, jump into its transporter history (“when did these rations arrive?”).
+Key relationship:
 
-transporterunits
-What it is Catalog of transporter pads: TransporterUnitID and the compartment they’re installed in. Currently you’ve got T-01 and T-02 in Transporter Room 1/2.
+- `user_holodeck_programs.user_id -> users.user_id`
 
-voyager_database_dump
+### `user_holodeck_logs`
 
-Key relationships
+Per-user holodeck session log used by the live portal.
 
-transporterunits.CompartmentID → shipcompartments.CompartmentID
+Key relationship:
 
-One unit → many rows in transporterlog.
+- `user_holodeck_logs.user_id -> users.user_id`
 
-Player can
+Supports:
 
-See which transporter rooms exist and where they are.
+- logging fresh sessions without mutating canon seed data
+- mixing base programs with user-authored programs in one workspace
 
-Filter transporter logs by unit (e.g., “Transporter Room 1 activity for this episode”).
+## Medical Tables
 
-transporterlog
-What it is Log of transporter events: which unit, which entity, optional crew member operating it, stardate, direction (Inbound/Outbound), destination compartment or off-ship location.
+### `medicalprofile`
 
-voyager_database_dump
+Stable, mostly one-row-per-person medical profile data.
 
-Key relationships
+Key relationship:
 
-transporterlog.TransporterUnitID → transporterunits.TransporterUnitID
+- `medicalprofile.CrewID -> crew.crew_id`
 
-transporterlog.EntityID → transportableentity.EntityID
+### `medicalrecords`
 
-transporterlog.DestinationCompartmentID → shipcompartments.CompartmentID
+Medical visit and treatment history.
 
-transporterlog.CrewID → crew.crew_id
+Key relationship:
 
-Player can
+- `medicalrecords.CrewID -> crew.crew_id`
 
-From a crew member: “Which entities has Tuvok transported recently?”
+Supports:
 
-From an entity: “Track the movement of Janeway’s luggage.”
+- chronological care history
+- medical dossier viewing
 
-From a location: “What was beamed into Cargo Bay 1 on SD 48153.42?”
+## Shuttle Table
 
-Timeframe queries like “show all transporter activity between SD X and Y.”
+### `shuttles`
 
-Again: straightforward log browsing, not “auto-detect sabotage.”
+Voyager shuttle roster with status, location, and notes.
 
-holodecks & holodeckprograms
-What they are
+Current V1 note:
 
-holodecks: physical holodeck bays, each tied to a compartment.
+- this table remains in the base schema as reference/catalog data
+- shuttle logging is not an active portal workspace in V1
 
-holodeckprograms: catalog of programs; in your earlier schema it likely had program ID, title, rating, author, etc., with a FK back to a holodeck or just a program library.
+## Auth And User Save Tables
 
-voyager_database_dump
+### `users`
 
-(Exact columns aren’t super critical for the design doc; the important part is “who ran what, where, when”.)
+Account table for workstation access.
 
-Key relationships
+### `user_sessions`
 
-holodecks.CompartmentID → shipcompartments.CompartmentID
+Session/token table used by bearer auth.
 
-A (future/optional) holodecklog or equivalent would link crew + holodeck + program + time.
+### Other user-owned write tables
 
-Player can
+These let the app layer player-authored records on top of the base Voyager data set:
 
-See which holodecks exist and where they are.
+- `user_custom_crew`
+- `user_personnel_actions`
+- `user_medical_profiles`
+- `user_medical_records`
+- `user_replicator_patterns`
+- `user_replicator_logs`
+- `user_holodeck_programs`
+- `user_holodeck_logs`
+- `user_transporter_events`
+- `user_transporter_event_passengers`
 
-Browse available programs.
+## What The Player Can Do In V1
 
-For a given crew member: “What holodeck programs has Paris been running lately?”
+### Browse people
 
-For a given program: “Who has run Fair Haven this week?”
+- search and filter the crew directory
+- open dossiers
+- review personnel history and medical context
 
-(Right now your dump doesn’t show a dedicated holodeck log table; if you want those last two bullets, we’ll add a tiny holodecklog later.)
+### Browse locations
 
-shuttles
-What it is Roster of shuttles: ID, name, shuttle type, current status (Docked, Away, Destroyed, Unknown), current location (Shuttlebay 1, Shuttlebay 2, Off-Ship), in-service and out-of-service stardates, plus a free-text notes field.
+- inspect ship compartments
+- see what replicators, transporters, and holodecks are installed there
 
-voyager_database_dump
+### Log activity
 
-Key relationships
+- personnel changes
+- medical visits
+- replicator usage
+- transporter events
+- holodeck sessions
 
-No FKs now (by design: we dropped the compartment FK and just use location enums/text).
+### Browse activity history
 
-Player can
-
-See which shuttles exist, which ones are destroyed, which are out on missions.
-
-Update a shuttle’s status as episodes progress (“Delta Flyer destroyed at SD xxxx”).
-
-Read notes like “Lost in ‘The Chute’” or “Damaged during Borg encounter.”
-
-medicalprofile
-What it is One row per crew member with fairly stable medical info: blood type, baseline vitals, allergies, maybe species-specific flags. Exact columns are simple scalar fields, nothing too wild.
-
-voyager_database_dump
-
-Key relationships
-
-medicalprofile.CrewID → crew.crew_id (1-to-1)
-
-Player can
-
-From a dossier, pop open the crew member’s basic medical profile.
-
-Keep this mostly “flavor text” and light stats rather than real-world PHI.
-
-medicalrecords
-What it is Per-visit or per-incident medical records tied to crew and stardate — e.g., “sprained wrist,” “knee surgery,” “decompression injury.”
-
-voyager_database_dump
-
-Key relationships
-
-medicalrecords.CrewID → crew.crew_id
-
-One crew member → many records.
-
-Player can
-
-See a chronological list of visits for a given crew member.
-
-Filter by timeframe (“What medical events occurred during this episode?”).
-
-Jump from an incident log (if you add one later) into the associated medical record and vice versa.
-
-powerallotments (low-priority / optional)
-What it is Per-crew allowances for soft resources: replicator rations (int) and holodeck hours (DECIMAL). Currently empty, but wired with a FK into crew.
-
-voyager_database_dump
-
-Key relationships
-
-powerallotments.CrewID → crew.crew_id
-
-Player can
-
-If you choose to use it:
-
-View how many rations / hours a crew member is allotted for a given period.
-
-Possibly decrement these when logging replicator or holodeck usage.
-
-Or you can leave this table present but unused as a “future feature” if ration micromanagement ends up feeling like busywork.
-
-High-level: what the player actually does
-Putting it together, your actual supported verbs look like:
-
-Browse people
-
-List crew, filter by department/species/designation.
-
-Open a dossier with crew, former-crew, medical profile, logs.
-
-Browse locations
-
-Look at a compartment and see what hardware lives there (replicators, transporters, holodecks).
-
-View all replicator or transporter events in that space for an episode or stardate range.
-
-Browse logs
-
-Replicator: who ordered what, from where, when.
-
-Transporter: what entities moved, via which unit, to which destination, when.
-
-(Later) Holodeck: who ran what program, where, when.
-
-Run simple time-window queries
-
-“Show all transporter events between SD 48150 and 48160.”
-
-“Show all coffee patterns replicated on SD 48315.6.”
-
-Track ships & equipment
-
-Shuttle roster: see which are docked/away/destroyed and update them as the story goes.
+- who ordered what
+- who transported where
+- who ran which holodeck program
+- what systems exist in each compartment

@@ -8,12 +8,15 @@ from typing import Optional
 
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, Header, HTTPException, Query
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 import pymysql
 
 BASE_DIR = Path(__file__).resolve().parents[1]  # points to /api
 load_dotenv(BASE_DIR / ".env")
+FRONTEND_BUILD_DIR = BASE_DIR.parent / "frontend" / "build"
 
 app = FastAPI(title="Voyager API")
 app.add_middleware(
@@ -23,6 +26,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Serve the React production bundle from FastAPI so the portal and API share one origin.
+if (FRONTEND_BUILD_DIR / "static").exists():
+    app.mount("/static", StaticFiles(directory=FRONTEND_BUILD_DIR / "static"), name="portal-static")
 
 
 class PersonnelActionCreate(BaseModel):
@@ -94,6 +101,22 @@ class TransporterLogCreate(BaseModel):
     ship_location_id: str = Field(min_length=1, max_length=10)
     off_ship_location: Optional[str] = Field(default=None, max_length=100)
     passenger_crew_ids: list[int] = Field(default_factory=list, max_length=10)
+
+
+class HolodeckLogCreate(BaseModel):
+    crew_id: int
+    program_id: str = Field(min_length=1, max_length=20)
+    holodeck_id: str = Field(min_length=1, max_length=10)
+    stardate: str = Field(min_length=1, max_length=20)
+
+
+class HolodeckProgramCreate(BaseModel):
+    program_name: str = Field(min_length=1, max_length=100)
+    holodeck_id: str = Field(min_length=1, max_length=10)
+    created_by: Optional[str] = Field(default=None, max_length=50)
+    access_level: Optional[str] = Field(default=None, max_length=20)
+    genre: Optional[str] = Field(default=None, max_length=30)
+    description: Optional[str] = None
 
 
 class AuthRegisterRequest(BaseModel):
@@ -172,12 +195,14 @@ def user_data_tables_exist() -> bool:
               'user_medical_records',
               'user_replicator_patterns',
               'user_replicator_logs',
+              'user_holodeck_programs',
+              'user_holodeck_logs',
               'user_transporter_events',
               'user_transporter_event_passengers'
           )
         """
     )
-    return bool(row and row["table_count"] == 8)
+    return bool(row and row["table_count"] == 10)
 
 
 def build_display_name(first_name: Optional[str], last_name: Optional[str]) -> str:
@@ -233,7 +258,7 @@ def hash_session_token(token: str) -> str:
     return hashlib.sha256(secret + token.encode("utf-8")).hexdigest()
 
 
-def create_user_session(user_id: int):
+def create_user_session(user_id: int) -> tuple[str, str]:
     raw_token = secrets.token_urlsafe(32)
     token_hash = hash_session_token(raw_token)
     now = datetime.now(timezone.utc)
@@ -265,7 +290,7 @@ def create_user_session(user_id: int):
     return raw_token, expires_at.isoformat()
 
 
-def serialize_user(row):
+def serialize_user(row: dict) -> dict:
     return {
         "user_id": row["user_id"],
         "email": row["email"],
@@ -311,7 +336,7 @@ def get_current_user(authorization: Optional[str] = Header(default=None)):
     return user
 
 
-def ensure_user_data_ready():
+def ensure_user_data_ready() -> None:
     if not user_data_tables_exist():
         raise HTTPException(
             status_code=503,
@@ -319,6 +344,8 @@ def ensure_user_data_ready():
         )
 
 
+# User-authored rows are translated into a separate ID space so canon seed data and
+# save-data rows can be merged in one UI without primary-key collisions.
 def storage_to_api_custom_crew_id(custom_crew_id: int) -> int:
     return -int(custom_crew_id)
 
@@ -333,6 +360,14 @@ def storage_to_api_user_pattern_id(pattern_id: int) -> int:
 
 def api_to_storage_user_pattern_id(pattern_id: int) -> int:
     return abs(int(pattern_id))
+
+
+def storage_to_api_user_holodeck_program_id(program_id: int) -> str:
+    return f"UHP-{int(program_id)}"
+
+
+def api_to_storage_user_holodeck_program_id(program_id: str) -> int:
+    return abs(int(str(program_id).split("-", 1)[1]))
 
 
 def get_latest_user_actions_map(user_id: int, crew_ids):
@@ -1046,12 +1081,56 @@ def get_system_compartment(compartment_id: str, current_user=Depends(get_current
             (compartment_id,),
         )
 
+        holodeck_usage_logs = fetch_all(
+            """
+            SELECT
+                hul.UsageLogID AS usage_log_id,
+                hul.CrewID AS crew_id,
+                hul.ProgramID AS program_id,
+                hul.HolodeckID AS holodeck_id,
+                hul.Stardate AS stardate,
+                hp.ProgramName AS program_name,
+                hp.CreatedBy AS created_by,
+                hp.Genre AS genre,
+                h.HolodeckDesignation AS holodeck_designation
+            FROM holodeckusagelog hul
+            INNER JOIN holodecks h
+                ON h.HolodeckID = hul.HolodeckID
+            INNER JOIN holodeckprograms hp
+                ON hp.ProgramID = hul.ProgramID
+            WHERE h.CompartmentID = %s
+            ORDER BY hul.UsageLogID DESC
+            """,
+            (compartment_id,),
+        )
+
+        resolved_holodeck_usage_logs = []
+        for row in holodeck_usage_logs:
+            identity = get_crew_identity(current_user["user_id"], row["crew_id"])
+            resolved_holodeck_usage_logs.append(
+                {
+                    "usage_log_id": row["usage_log_id"],
+                    "crew_id": row["crew_id"],
+                    "program_id": row["program_id"],
+                    "holodeck_id": row["holodeck_id"],
+                    "stardate": row["stardate"],
+                    "program_name": row["program_name"],
+                    "created_by": row["created_by"],
+                    "genre": row["genre"],
+                    "holodeck_designation": row["holodeck_designation"],
+                    "first_name": identity["first_name"] if identity else "",
+                    "last_name": identity["last_name"] if identity else "",
+                    "display_name": build_display_name(identity["first_name"], identity["last_name"]) if identity else "Unknown Record",
+                }
+            )
+
         return {
             **compartment,
             "replicators": replicators,
             "transporters": transporters,
             "holodecks": holodecks,
             "holodeck_programs": holodeck_programs,
+            "holodeck_usage_logs": resolved_holodeck_usage_logs,
         }
     except HTTPException:
         raise
@@ -1221,6 +1300,378 @@ def get_transporter_logs(
             logs.append(resolved)
 
         return logs
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.get("/holodeck/logs")
+def get_holodeck_logs(
+    search: Optional[str] = Query(default=None),
+    crew_id: Optional[int] = Query(default=None),
+    program_id: Optional[str] = Query(default=None),
+    holodeck_id: Optional[str] = Query(default=None),
+    current_user=Depends(get_current_user),
+):
+    try:
+        # The portal blends canon-style base logs with per-user holodeck records.
+        base_rows = fetch_all(
+            """
+            SELECT
+                hul.UsageLogID AS usage_log_id,
+                hul.CrewID AS crew_id,
+                hul.ProgramID AS program_id,
+                hul.HolodeckID AS holodeck_id,
+                hul.Stardate AS stardate,
+                hp.ProgramName AS program_name,
+                hp.CreatedBy AS created_by,
+                hp.Genre AS genre,
+                h.HolodeckDesignation AS holodeck_designation,
+                sc.CompartmentName AS compartment_name
+            FROM holodeckusagelog hul
+            INNER JOIN holodeckprograms hp
+                ON hp.ProgramID = hul.ProgramID
+            INNER JOIN holodecks h
+                ON h.HolodeckID = hul.HolodeckID
+            LEFT JOIN shipcompartments sc
+                ON sc.CompartmentID = h.CompartmentID
+            ORDER BY hul.UsageLogID DESC
+            """
+        )
+
+        user_rows = []
+        if user_data_tables_exist():
+            user_rows = fetch_all(
+                """
+                SELECT
+                    log_id,
+                    crew_id,
+                    program_id,
+                    holodeck_id,
+                    stardate,
+                    created_at
+                FROM user_holodeck_logs
+                WHERE user_id = %s
+                ORDER BY log_id DESC
+                """,
+                (current_user["user_id"],),
+            )
+
+        base_program_map = {
+            row["program_id"]: row
+            for row in fetch_all(
+                """
+                SELECT
+                    hp.ProgramID AS program_id,
+                    hp.ProgramName AS program_name,
+                    hp.HolodeckID AS holodeck_id,
+                    hp.CreatedBy AS created_by,
+                    hp.AccessLevel AS access_level,
+                    hp.Genre AS genre,
+                    hp.Description AS description
+                FROM holodeckprograms hp
+                """
+            )
+        }
+        user_program_map = {}
+        if user_data_tables_exist():
+            user_program_map = {
+                storage_to_api_user_holodeck_program_id(row["program_id"]): row
+                for row in fetch_all(
+                    """
+                    SELECT
+                        program_id,
+                        program_name,
+                        holodeck_id,
+                        created_by,
+                        access_level,
+                        genre,
+                        description
+                    FROM user_holodeck_programs
+                    WHERE user_id = %s
+                    """,
+                    (current_user["user_id"],),
+                )
+            }
+
+        unit_map = {
+            row["holodeck_id"]: row
+            for row in fetch_all(
+                """
+                SELECT
+                    h.HolodeckID AS holodeck_id,
+                    h.HolodeckDesignation AS holodeck_designation,
+                    sc.CompartmentName AS compartment_name
+                FROM holodecks h
+                LEFT JOIN shipcompartments sc
+                    ON sc.CompartmentID = h.CompartmentID
+                """
+            )
+        }
+
+        resolved_rows = []
+        for row in base_rows:
+            if crew_id is not None and row["crew_id"] != crew_id:
+                continue
+            if program_id is not None and row["program_id"] != program_id:
+                continue
+            if holodeck_id is not None and row["holodeck_id"] != holodeck_id:
+                continue
+
+            identity = get_crew_identity(current_user["user_id"], row["crew_id"])
+            resolved = {
+                "log_id": f"base-{row['usage_log_id']}",
+                "usage_log_id": row["usage_log_id"],
+                "crew_id": row["crew_id"],
+                "program_id": row["program_id"],
+                "holodeck_id": row["holodeck_id"],
+                "stardate": row["stardate"],
+                "program_name": row["program_name"],
+                "created_by": row["created_by"],
+                "genre": row["genre"],
+                "holodeck_designation": row["holodeck_designation"],
+                "compartment_name": row["compartment_name"],
+                "first_name": identity["first_name"] if identity else "",
+                "last_name": identity["last_name"] if identity else "",
+                "display_name": build_display_name(identity["first_name"], identity["last_name"]) if identity else "Unknown Record",
+            }
+            search_blob = " ".join(
+                [
+                    resolved["display_name"] or "",
+                    resolved["program_name"] or "",
+                    resolved["created_by"] or "",
+                    resolved["genre"] or "",
+                    resolved["holodeck_id"] or "",
+                    resolved["holodeck_designation"] or "",
+                    resolved["compartment_name"] or "",
+                    resolved["stardate"] or "",
+                ]
+            ).lower()
+            if search and search.strip().lower() not in search_blob:
+                continue
+            resolved_rows.append(resolved)
+
+        for row in user_rows:
+            if crew_id is not None and row["crew_id"] != crew_id:
+                continue
+            if program_id is not None and row["program_id"] != program_id:
+                continue
+            if holodeck_id is not None and row["holodeck_id"] != holodeck_id:
+                continue
+
+            identity = get_crew_identity(current_user["user_id"], row["crew_id"])
+            program = user_program_map.get(row["program_id"]) if str(row["program_id"]).startswith("UHP-") else base_program_map.get(row["program_id"])
+            unit = unit_map.get(row["holodeck_id"], {})
+            resolved = {
+                "log_id": f"user-{row['log_id']}",
+                "usage_log_id": row["log_id"],
+                "crew_id": row["crew_id"],
+                "program_id": row["program_id"],
+                "holodeck_id": row["holodeck_id"],
+                "stardate": row["stardate"],
+                "program_name": program["program_name"] if program else row["program_id"],
+                "created_by": program["created_by"] if program else None,
+                "genre": program["genre"] if program else None,
+                "holodeck_designation": unit.get("holodeck_designation"),
+                "compartment_name": unit.get("compartment_name"),
+                "first_name": identity["first_name"] if identity else "",
+                "last_name": identity["last_name"] if identity else "",
+                "display_name": build_display_name(identity["first_name"], identity["last_name"]) if identity else "Unknown Record",
+            }
+            search_blob = " ".join(
+                [
+                    resolved["display_name"] or "",
+                    resolved["program_name"] or "",
+                    resolved["created_by"] or "",
+                    resolved["genre"] or "",
+                    resolved["holodeck_id"] or "",
+                    resolved["holodeck_designation"] or "",
+                    resolved["compartment_name"] or "",
+                    resolved["stardate"] or "",
+                ]
+            ).lower()
+            if search and search.strip().lower() not in search_blob:
+                continue
+            resolved_rows.append(resolved)
+
+        resolved_rows.sort(key=lambda row: (row["stardate"] or "", row["log_id"]), reverse=True)
+        return resolved_rows
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.get("/holodeck/programs")
+def get_holodeck_programs(search: Optional[str] = Query(default=None), current_user=Depends(get_current_user)):
+    try:
+        filters = []
+        params = []
+        if search:
+            filters.append("(hp.ProgramName LIKE %s OR hp.CreatedBy LIKE %s OR hp.Genre LIKE %s OR h.HolodeckDesignation LIKE %s)")
+            search_term = f"%{search}%"
+            params.extend([search_term, search_term, search_term, search_term])
+
+        where_clause = f"WHERE {' AND '.join(filters)}" if filters else ""
+        base_programs = fetch_all(
+            f"""
+            SELECT
+                hp.ProgramID AS program_id,
+                hp.ProgramName AS program_name,
+                hp.HolodeckID AS holodeck_id,
+                hp.CreatedBy AS created_by,
+                hp.AccessLevel AS access_level,
+                hp.Genre AS genre,
+                hp.Description AS description,
+                h.HolodeckDesignation AS holodeck_designation
+            FROM holodeckprograms hp
+            LEFT JOIN holodecks h
+                ON h.HolodeckID = hp.HolodeckID
+            {where_clause}
+            """
+            ,
+            tuple(params),
+        )
+
+        user_programs = []
+        if user_data_tables_exist():
+            user_filters = ["uhp.user_id = %s"]
+            user_params = [current_user["user_id"]]
+            if search:
+                user_filters.append("(uhp.program_name LIKE %s OR uhp.created_by LIKE %s OR uhp.genre LIKE %s OR h.HolodeckDesignation LIKE %s)")
+                search_term = f"%{search}%"
+                user_params.extend([search_term, search_term, search_term, search_term])
+            user_where = f"WHERE {' AND '.join(user_filters)}"
+            user_programs = [
+                {
+                    "program_id": storage_to_api_user_holodeck_program_id(row["program_id"]),
+                    "program_name": row["program_name"],
+                    "holodeck_id": row["holodeck_id"],
+                    "created_by": row["created_by"],
+                    "access_level": row["access_level"],
+                    "genre": row["genre"],
+                    "description": row["description"],
+                    "holodeck_designation": row["holodeck_designation"],
+                }
+                for row in fetch_all(
+                    f"""
+                    SELECT
+                        uhp.program_id,
+                        uhp.program_name,
+                        uhp.holodeck_id,
+                        uhp.created_by,
+                        uhp.access_level,
+                        uhp.genre,
+                        uhp.description,
+                        h.HolodeckDesignation AS holodeck_designation
+                    FROM user_holodeck_programs uhp
+                    LEFT JOIN holodecks h
+                        ON h.HolodeckID = uhp.holodeck_id
+                    {user_where}
+                    """,
+                    tuple(user_params),
+                )
+            ]
+
+        return sorted(base_programs + user_programs, key=lambda row: ((row["program_name"] or "").lower(), row["program_id"]))
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.get("/holodeck/units")
+def get_holodeck_units(current_user=Depends(get_current_user)):
+    try:
+        return fetch_all(
+            """
+            SELECT
+                h.HolodeckID AS holodeck_id,
+                h.HolodeckDesignation AS holodeck_designation,
+                h.AccessLevel AS access_level,
+                h.CompartmentID AS compartment_id,
+                sc.CompartmentName AS compartment_name
+            FROM holodecks h
+            LEFT JOIN shipcompartments sc
+                ON sc.CompartmentID = h.CompartmentID
+            ORDER BY h.HolodeckID
+            """
+        )
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.post("/holodeck/programs")
+def create_holodeck_program(program: HolodeckProgramCreate, current_user=Depends(get_current_user)):
+    try:
+        ensure_user_data_ready()
+        holodeck_exists = fetch_one("SELECT HolodeckID FROM holodecks WHERE HolodeckID = %s", (program.holodeck_id,))
+        if not holodeck_exists:
+            raise HTTPException(status_code=404, detail="Holodeck bay not found")
+
+        next_program_id = execute_write(
+            """
+            INSERT INTO user_holodeck_programs (
+                user_id,
+                program_name,
+                holodeck_id,
+                created_by,
+                access_level,
+                genre,
+                description
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """,
+            (
+                current_user["user_id"],
+                program.program_name,
+                program.holodeck_id,
+                program.created_by,
+                program.access_level,
+                program.genre,
+                program.description,
+            ),
+        )
+
+        return {"status": "ok", "program_id": storage_to_api_user_holodeck_program_id(next_program_id)}
+    except HTTPException:
+        raise
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.post("/holodeck/logs")
+def create_holodeck_log(log: HolodeckLogCreate, current_user=Depends(get_current_user)):
+    try:
+        ensure_user_data_ready()
+        crew_exists = get_crew_identity(current_user["user_id"], log.crew_id)
+        if not crew_exists:
+            raise HTTPException(status_code=404, detail="Crew member not found")
+
+        holodeck_exists = fetch_one("SELECT HolodeckID FROM holodecks WHERE HolodeckID = %s", (log.holodeck_id,))
+        if not holodeck_exists:
+            raise HTTPException(status_code=404, detail="Holodeck bay not found")
+
+        if str(log.program_id).startswith("UHP-"):
+            program_exists = fetch_one(
+                "SELECT program_id FROM user_holodeck_programs WHERE user_id = %s AND program_id = %s",
+                (current_user["user_id"], api_to_storage_user_holodeck_program_id(log.program_id)),
+            )
+        else:
+            program_exists = fetch_one("SELECT ProgramID FROM holodeckprograms WHERE ProgramID = %s", (log.program_id,))
+        if not program_exists:
+            raise HTTPException(status_code=404, detail="Holodeck program not found")
+
+        log_id = execute_write(
+            """
+            INSERT INTO user_holodeck_logs (
+                user_id,
+                crew_id,
+                program_id,
+                holodeck_id,
+                stardate
+            ) VALUES (%s, %s, %s, %s, %s)
+            """,
+            (current_user["user_id"], log.crew_id, log.program_id, log.holodeck_id, log.stardate),
+        )
+
+        return {"status": "ok", "log_id": log_id}
+    except HTTPException:
+        raise
     except Exception as e:
         return {"error": str(e)}
 
@@ -1844,3 +2295,30 @@ def test_db(current_user=Depends(get_current_user)):
         return {"db_status": "connected", "result": row}
     except Exception as e:
         return {"db_status": "error", "detail": str(e)}
+
+
+def _portal_index() -> FileResponse:
+    index_path = FRONTEND_BUILD_DIR / "index.html"
+    if not index_path.exists():
+        raise HTTPException(status_code=404, detail="Portal build not found")
+    return FileResponse(index_path)
+
+
+@app.get("/portal")
+def portal_root():
+    return _portal_index()
+
+
+# Let the SPA router handle nested portal paths after FastAPI confirms no file exists.
+@app.get("/portal/{full_path:path}")
+def portal_paths(full_path: str):
+    candidate = (FRONTEND_BUILD_DIR / full_path).resolve()
+    try:
+        candidate.relative_to(FRONTEND_BUILD_DIR)
+    except ValueError:
+        return _portal_index()
+
+    if candidate.exists() and candidate.is_file():
+        return FileResponse(candidate)
+
+    return _portal_index()

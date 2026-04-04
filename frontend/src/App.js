@@ -271,6 +271,24 @@ const initialTransporterLogForm = {
   passenger_crew_ids: Array.from({ length: 10 }, () => ''),
 };
 
+const initialHolodeckLogForm = {
+  episode_season: '',
+  episode_title: '',
+  crew_id: '',
+  holodeck_id: '',
+  program_id: '',
+  stardate: '',
+};
+
+const initialHolodeckProgramForm = {
+  program_name: '',
+  holodeck_id: '',
+  created_by: '',
+  access_level: '',
+  genre: '',
+  description: '',
+};
+
 const initialCrewCreateForm = {
   first_name: '',
   last_name: '',
@@ -329,6 +347,10 @@ function formatRecordName(record) {
     return firstName;
   }
 
+  if (firstName === lastName) {
+    return firstName;
+  }
+
   return `${lastName}, ${firstName}`;
 }
 
@@ -342,6 +364,22 @@ function formatTransporterControlLocationName(name) {
   }
 
   return name;
+}
+
+function formatHolodeckLabel(holodeck) {
+  if (!holodeck) {
+    return '';
+  }
+
+  const designation = (holodeck.holodeck_designation || '').trim();
+  const compartment = (holodeck.compartment_name || '').trim();
+  const holodeckId = (holodeck.holodeck_id || '').trim();
+
+  if (designation && compartment && designation.toLowerCase() !== compartment.toLowerCase()) {
+    return `${designation} | ${compartment}`;
+  }
+
+  return designation || compartment || holodeckId || 'Unknown holodeck';
 }
 
 function App() {
@@ -409,6 +447,20 @@ function App() {
   const [loadingReplicator, setLoadingReplicator] = useState(true);
   const [submittingReplicator, setSubmittingReplicator] = useState(false);
   const [submittingReplicatorPattern, setSubmittingReplicatorPattern] = useState(false);
+  const [holodeckLogs, setHolodeckLogs] = useState([]);
+  const [holodeckPrograms, setHolodeckPrograms] = useState([]);
+  const [holodeckUnits, setHolodeckUnits] = useState([]);
+  const [holodeckSearch, setHolodeckSearch] = useState('');
+  const [holodeckPage, setHolodeckPage] = useState(1);
+  const [selectedHolodeckLogId, setSelectedHolodeckLogId] = useState(null);
+  const [selectedHolodeckLog, setSelectedHolodeckLog] = useState(null);
+  const [showHolodeckConsole, setShowHolodeckConsole] = useState(false);
+  const [holodeckTab, setHolodeckTab] = useState('newlog');
+  const [holodeckLogForm, setHolodeckLogForm] = useState(initialHolodeckLogForm);
+  const [holodeckProgramForm, setHolodeckProgramForm] = useState(initialHolodeckProgramForm);
+  const [loadingHolodeck, setLoadingHolodeck] = useState(true);
+  const [submittingHolodeck, setSubmittingHolodeck] = useState(false);
+  const [submittingHolodeckProgram, setSubmittingHolodeckProgram] = useState(false);
   const [systemsCompartments, setSystemsCompartments] = useState([]);
   const [systemsSearch, setSystemsSearch] = useState('');
   const [systemsPage, setSystemsPage] = useState(1);
@@ -423,6 +475,7 @@ function App() {
   const selectedMedicalSeasonGuide = VOYAGER_EPISODE_GUIDE.find((entry) => entry.season === medicalRecordForm.episode_season);
   const selectedTransporterSeasonGuide = VOYAGER_EPISODE_GUIDE.find((entry) => entry.season === transporterLogForm.episode_season);
   const selectedReplicatorSeasonGuide = VOYAGER_EPISODE_GUIDE.find((entry) => entry.season === replicatorLogForm.episode_season);
+  const selectedHolodeckSeasonGuide = VOYAGER_EPISODE_GUIDE.find((entry) => entry.season === holodeckLogForm.episode_season);
 
   useEffect(() => {
     async function loadCurrentUser() {
@@ -652,6 +705,60 @@ function App() {
 
     loadTransporterWorkspace();
   }, [currentUser, transporterSearch, selectedTransporterEventId]);
+
+  useEffect(() => {
+    async function loadHolodeckWorkspace() {
+      if (!currentUser) {
+        setLoadingHolodeck(false);
+        return;
+      }
+
+      setLoadingHolodeck(true);
+      setError('');
+
+      const params = new URLSearchParams();
+      if (holodeckSearch.trim()) {
+        params.set('search', holodeckSearch.trim());
+      }
+
+      try {
+        const [logData, programData, unitData, crewData] = await Promise.all([
+          apiFetch(`/holodeck/logs${params.toString() ? `?${params.toString()}` : ''}`),
+          apiFetch(`/holodeck/programs${params.toString() ? `?${params.toString()}` : ''}`),
+          apiFetch('/holodeck/units'),
+          apiFetch('/crew'),
+        ]);
+        setHolodeckLogs(logData);
+        setHolodeckPrograms(programData);
+        setHolodeckUnits(unitData);
+        setReplicatorCrewOptions(crewData);
+        if (selectedHolodeckLogId && !logData.some((log) => log.log_id === selectedHolodeckLogId)) {
+          setSelectedHolodeckLogId(null);
+          setSelectedHolodeckLog(null);
+        }
+      } catch (loadError) {
+        setError(loadError.message);
+      } finally {
+        setLoadingHolodeck(false);
+      }
+    }
+
+    loadHolodeckWorkspace();
+  }, [currentUser, holodeckSearch, selectedHolodeckLogId]);
+
+  useEffect(() => {
+    setHolodeckPage(1);
+  }, [holodeckSearch]);
+
+  useEffect(() => {
+    if (!selectedHolodeckLogId) {
+      setSelectedHolodeckLog(null);
+      return;
+    }
+
+    const matchingLog = holodeckLogs.find((log) => log.log_id === selectedHolodeckLogId) || null;
+    setSelectedHolodeckLog(matchingLog);
+  }, [holodeckLogs, selectedHolodeckLogId]);
 
   useEffect(() => {
     async function loadSystemsCompartments() {
@@ -922,6 +1029,26 @@ function App() {
     return logData;
   }
 
+  async function refreshHolodeckWorkspace() {
+    const params = new URLSearchParams();
+    if (holodeckSearch.trim()) {
+      params.set('search', holodeckSearch.trim());
+    }
+
+    const [logData, programData, unitData, crewData] = await Promise.all([
+      apiFetch(`/holodeck/logs${params.toString() ? `?${params.toString()}` : ''}`),
+      apiFetch(`/holodeck/programs${params.toString() ? `?${params.toString()}` : ''}`),
+      apiFetch('/holodeck/units'),
+      apiFetch('/crew'),
+    ]);
+
+    setHolodeckLogs(logData);
+    setHolodeckPrograms(programData);
+    setHolodeckUnits(unitData);
+    setReplicatorCrewOptions(crewData);
+    return { logData, programData, unitData };
+  }
+
   function handleFormChange(event) {
     const { name, value } = event.target;
     setFormState((current) => ({
@@ -1032,6 +1159,34 @@ function App() {
     }));
   }
 
+  function handleHolodeckLogChange(event) {
+    const { name, value } = event.target;
+    setHolodeckLogForm((current) => ({
+      ...current,
+      [name]: value,
+    }));
+  }
+
+  function handleHolodeckSeasonChange(event) {
+    const season = event.target.value;
+    setHolodeckLogForm((current) => ({
+      ...current,
+      episode_season: season,
+      episode_title: '',
+      stardate: '',
+    }));
+  }
+
+  function handleHolodeckEpisodeChange(event) {
+    const episodeTitle = event.target.value;
+    const selectedEpisode = selectedHolodeckSeasonGuide?.episodes.find(([title]) => title === episodeTitle);
+    setHolodeckLogForm((current) => ({
+      ...current,
+      episode_title: episodeTitle,
+      stardate: selectedEpisode?.[1] || current.stardate,
+    }));
+  }
+
   function handleTransporterChange(event) {
     const { name, value } = event.target;
     setTransporterLogForm((current) => ({
@@ -1079,6 +1234,14 @@ function App() {
     }));
   }
 
+  function handleHolodeckProgramChange(event) {
+    const { name, value } = event.target;
+    setHolodeckProgramForm((current) => ({
+      ...current,
+      [name]: value,
+    }));
+  }
+
   function openReplicatorConsole(tab = 'newlog', logId = null) {
     setShowReplicatorConsole(true);
     setReplicatorTab(tab);
@@ -1090,6 +1253,19 @@ function App() {
     setSelectedReplicatorLogId(null);
     setSelectedReplicatorLog(null);
     setReplicatorTab('newlog');
+  }
+
+  function openHolodeckConsole(tab = 'newlog', logId = null) {
+    setShowHolodeckConsole(true);
+    setHolodeckTab(tab);
+    setSelectedHolodeckLogId(logId);
+  }
+
+  function closeHolodeckConsole() {
+    setShowHolodeckConsole(false);
+    setSelectedHolodeckLogId(null);
+    setSelectedHolodeckLog(null);
+    setHolodeckTab('newlog');
   }
 
   async function openTransporterConsole(tab = 'newlog', eventId = null) {
@@ -1177,6 +1353,9 @@ function App() {
       setShowReplicatorConsole(false);
       setSelectedReplicatorLogId(null);
       setSelectedReplicatorLog(null);
+      setShowHolodeckConsole(false);
+      setSelectedHolodeckLogId(null);
+      setSelectedHolodeckLog(null);
       setError('');
       setSuccessMessage('');
     }
@@ -1436,6 +1615,70 @@ function App() {
     }
   }
 
+  async function handleHolodeckLogSubmit(event) {
+    event.preventDefault();
+    setSubmittingHolodeck(true);
+    setError('');
+    setSuccessMessage('');
+
+    try {
+      const result = await apiFetch('/holodeck/logs', {
+        method: 'POST',
+        body: JSON.stringify({
+          crew_id: Number(holodeckLogForm.crew_id),
+          holodeck_id: holodeckLogForm.holodeck_id,
+          program_id: holodeckLogForm.program_id,
+          stardate: holodeckLogForm.stardate,
+        }),
+      });
+
+      await refreshHolodeckWorkspace();
+      setSelectedHolodeckLogId(`user-${result.log_id}`);
+      setHolodeckTab('detail');
+      setHolodeckLogForm(initialHolodeckLogForm);
+      setShowHolodeckConsole(true);
+      setSuccessMessage('Holodeck session logged.');
+    } catch (submitError) {
+      setError(submitError.message);
+    } finally {
+      setSubmittingHolodeck(false);
+    }
+  }
+
+  async function handleHolodeckProgramSubmit(event) {
+    event.preventDefault();
+    setSubmittingHolodeckProgram(true);
+    setError('');
+    setSuccessMessage('');
+
+    try {
+      const result = await apiFetch('/holodeck/programs', {
+        method: 'POST',
+        body: JSON.stringify({
+          program_name: holodeckProgramForm.program_name,
+          holodeck_id: holodeckProgramForm.holodeck_id,
+          created_by: holodeckProgramForm.created_by || null,
+          access_level: holodeckProgramForm.access_level || null,
+          genre: holodeckProgramForm.genre || null,
+          description: holodeckProgramForm.description || null,
+        }),
+      });
+
+      await refreshHolodeckWorkspace();
+      setHolodeckProgramForm(initialHolodeckProgramForm);
+      setHolodeckLogForm((current) => ({
+        ...current,
+        program_id: result.program_id,
+      }));
+      setHolodeckTab('newlog');
+      setSuccessMessage('Holodeck program added to the library.');
+    } catch (submitError) {
+      setError(submitError.message);
+    } finally {
+      setSubmittingHolodeckProgram(false);
+    }
+  }
+
   const selectedDepartmentName = departments.find(
     (department) => String(department.department_id) === String(formState.new_department_id)
   )?.department_name;
@@ -1447,6 +1690,15 @@ function App() {
   );
   const selectedReplicatorPattern = replicatorPatterns.find(
     (pattern) => String(pattern.pattern_id) === String(replicatorLogForm.pattern_id)
+  );
+  const selectedHolodeckCrew = replicatorCrewOptions.find(
+    (member) => String(member.crew_id) === String(holodeckLogForm.crew_id)
+  );
+  const selectedHolodeckUnit = holodeckUnits.find(
+    (unit) => unit.holodeck_id === holodeckLogForm.holodeck_id
+  );
+  const selectedHolodeckProgram = holodeckPrograms.find(
+    (program) => String(program.program_id) === String(holodeckLogForm.program_id)
   );
   const selectedTransporterUnit = transporterUnits.find(
     (unit) => unit.unit_id === transporterLogForm.transporter_unit_id
@@ -1479,6 +1731,9 @@ function App() {
     (safeReplicatorPatternPage - 1) * CREW_PAGE_SIZE,
     safeReplicatorPatternPage * CREW_PAGE_SIZE
   );
+  const totalHolodeckPages = Math.max(1, Math.ceil(holodeckLogs.length / CREW_PAGE_SIZE));
+  const safeHolodeckPage = Math.min(holodeckPage, totalHolodeckPages);
+  const pagedHolodeckLogs = holodeckLogs.slice((safeHolodeckPage - 1) * CREW_PAGE_SIZE, safeHolodeckPage * CREW_PAGE_SIZE);
   const totalSystemsPages = Math.max(1, Math.ceil(systemsCompartments.length / CREW_PAGE_SIZE));
   const safeSystemsPage = Math.min(systemsPage, totalSystemsPages);
   const pagedCompartments = systemsCompartments.slice((safeSystemsPage - 1) * CREW_PAGE_SIZE, safeSystemsPage * CREW_PAGE_SIZE);
@@ -1490,6 +1745,8 @@ function App() {
         ? 'Transporter Records and Pad Operations'
       : activeWorkspace === 'replicator'
         ? 'Replicator Usage Logs and Pattern Library'
+        : activeWorkspace === 'holodeck'
+          ? 'Holodeck Usage Records and Program Activity'
         : 'Ship Systems and Installed Units';
   const workspaceMode = activeWorkspace === 'personnel'
     ? 'Episode Logging'
@@ -1499,6 +1756,8 @@ function App() {
         ? 'Pad Operations'
       : activeWorkspace === 'replicator'
         ? 'Consumption Tracking'
+        : activeWorkspace === 'holodeck'
+          ? 'Program Tracking'
         : 'Infrastructure Browsing';
 
   if (authLoading) {
@@ -1583,6 +1842,7 @@ function App() {
           <button className={`rail-button ${activeWorkspace === 'medical' ? 'active' : ''}`} type="button" onClick={() => setActiveWorkspace('medical')}>Medical</button>
           <button className={`rail-button ${activeWorkspace === 'transporter' ? 'active' : ''}`} type="button" onClick={() => setActiveWorkspace('transporter')}>Transporter</button>
           <button className={`rail-button ${activeWorkspace === 'replicator' ? 'active' : ''}`} type="button" onClick={() => setActiveWorkspace('replicator')}>Replicator</button>
+          <button className={`rail-button ${activeWorkspace === 'holodeck' ? 'active' : ''}`} type="button" onClick={() => setActiveWorkspace('holodeck')}>Holodeck</button>
           <button className={`rail-button ${activeWorkspace === 'systems' ? 'active' : ''}`} type="button" onClick={() => setActiveWorkspace('systems')}>Ship Systems</button>
         </div>
 
@@ -1818,7 +2078,7 @@ function App() {
                     <button
                       key={transportEvent.event_id}
                       type="button"
-                      className={`crew-card ${selectedTransporterEventId === transportEvent.event_id && showTransporterConsole ? 'selected' : ''}`}
+                      className={`crew-card ${selectedTransporterEventId === transportEvent.event_id ? 'selected' : ''}`}
                       onClick={() => openTransporterConsole('detail', transportEvent.event_id)}
                     >
                       <span className="crew-name">{transportEvent.transport_direction} | {transportEvent.passenger_count} travelers</span>
@@ -1896,7 +2156,7 @@ function App() {
                     <button
                       key={log.log_id}
                       type="button"
-                      className={`crew-card ${selectedReplicatorLogId === log.log_id && showReplicatorConsole ? 'selected' : ''}`}
+                      className={`crew-card ${selectedReplicatorLogId === log.log_id ? 'selected' : ''}`}
                       onClick={() => openReplicatorConsole('detail', log.log_id)}
                     >
                       <span className="crew-name">{log.pattern_name || `Pattern ${log.pattern_id}`}</span>
@@ -1931,6 +2191,84 @@ function App() {
                 </div>
                 <div className="empty-state">
                   Replicator tracks requests and consumption, not installed hardware. Use this workspace to review past usage, browse available patterns, and file a new replication event against a crew record.
+                </div>
+              </section>
+            ) : null}
+          </>
+        ) : activeWorkspace === 'holodeck' ? (
+          <>
+            <section className="control-row medical-control-row">
+              <label className="control control-wide">
+                <span>Search Holodeck Activity</span>
+                <input
+                  type="text"
+                  value={holodeckSearch}
+                  onChange={(event) => setHolodeckSearch(event.target.value)}
+                  placeholder="Paris, Captain Proton, Holodeck 2..."
+                />
+              </label>
+              <div className="panel inline-panel">
+                <span className="eyebrow">Usage Summary</span>
+                <strong>{loadingHolodeck ? 'Loading...' : `${holodeckLogs.length} usage events`}</strong>
+              </div>
+              <div className="panel inline-panel">
+                <span className="eyebrow">Program Watch</span>
+                <strong>{loadingHolodeck ? 'Loading...' : `${new Set(holodeckLogs.map((log) => log.program_id)).size} programs in rotation`}</strong>
+              </div>
+            </section>
+
+            <section className="workspace-grid">
+              <div className="panel panel-list panel-list-only">
+                <div className="panel-header">
+                  <span className="eyebrow">Holodeck Log</span>
+                  <div className="panel-header-actions">
+                    <strong>{loadingHolodeck ? 'Loading...' : `Page ${safeHolodeckPage} of ${totalHolodeckPages} | ${holodeckLogs.length} events`}</strong>
+                    <button className="page-button" type="button" onClick={() => openHolodeckConsole('newlog')}>
+                      New Holodeck Log
+                    </button>
+                  </div>
+                </div>
+
+                <div className="crew-list">
+                  {pagedHolodeckLogs.map((log) => (
+                    <button
+                      key={log.log_id}
+                      type="button"
+                      className={`crew-card ${selectedHolodeckLogId === log.log_id ? 'selected' : ''}`}
+                      onClick={() => openHolodeckConsole('detail', log.log_id)}
+                    >
+                      <span className="crew-name">{log.program_name || log.program_id}</span>
+                      <span>{formatRecordName(log)}</span>
+                      <span>{log.holodeck_designation || log.holodeck_id}</span>
+                      <span>{log.stardate} | Creator: {log.created_by || 'Unknown'}</span>
+                    </button>
+                  ))}
+                  {!loadingHolodeck && !holodeckLogs.length ? (
+                    <div className="empty-state">No holodeck activity matches the current search. Open the holodeck console to file the first session or add a fresh program.</div>
+                  ) : null}
+                </div>
+
+                {totalHolodeckPages > 1 ? (
+                  <div className="pagination-bar">
+                    <button type="button" className="page-button" onClick={() => setHolodeckPage((page) => Math.max(1, page - 1))} disabled={safeHolodeckPage === 1}>Previous Page</button>
+                    <div className="page-indicator">
+                      <span className="eyebrow">Holodeck Pagination</span>
+                      <strong>{safeHolodeckPage} / {totalHolodeckPages}</strong>
+                    </div>
+                    <button type="button" className="page-button" onClick={() => setHolodeckPage((page) => Math.min(totalHolodeckPages, page + 1))} disabled={safeHolodeckPage === totalHolodeckPages}>Next Page</button>
+                  </div>
+                ) : null}
+              </div>
+            </section>
+
+            {!showHolodeckConsole ? (
+              <section className="panel recent-panel">
+                <div className="panel-header">
+                  <span className="eyebrow">Holodeck Status</span>
+                  <strong>Open The Console To Track Program Use</strong>
+                </div>
+                <div className="empty-state">
+                  Holodeck runs live here as crew activity. Open the console to add a new session, expand the program library, and confirm who keeps vanishing into the holonovel queue.
                 </div>
               </section>
             ) : null}
@@ -3118,6 +3456,289 @@ function App() {
         </div>
       ) : null}
 
+      {showHolodeckConsole && activeWorkspace === 'holodeck' ? (
+        <div className="dossier-overlay" onClick={closeHolodeckConsole}>
+          <div
+            ref={dossierRef}
+            className="dossier-window"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="window-toolbar">
+              <div>
+                <span className="eyebrow">Holodeck Console</span>
+                <strong>
+                  {selectedHolodeckLog
+                    ? `${selectedHolodeckLog.program_name || selectedHolodeckLog.program_id} | ${selectedHolodeckLog.holodeck_designation || selectedHolodeckLog.holodeck_id}`
+                    : 'New Holodeck Record'}
+                </strong>
+              </div>
+              <button className="window-close" type="button" onClick={closeHolodeckConsole}>
+                Close Console
+              </button>
+            </div>
+
+            <div className="window-grid">
+              <div className="panel panel-dossier">
+                <div className="dossier-grid">
+                  <div className="metric">
+                    <span>Active Log</span>
+                    <strong>{selectedHolodeckLog ? selectedHolodeckLog.log_id : 'New Entry'}</strong>
+                  </div>
+                  <div className="metric">
+                    <span>Program</span>
+                    <strong>{selectedHolodeckLog?.program_name || selectedHolodeckProgram?.program_name || 'Not selected'}</strong>
+                  </div>
+                  <div className="metric">
+                    <span>Crew</span>
+                    <strong>{selectedHolodeckLog ? formatRecordName(selectedHolodeckLog) : selectedHolodeckCrew ? formatRecordName(selectedHolodeckCrew) : 'No crew selected'}</strong>
+                  </div>
+                  <div className="metric">
+                    <span>Holodeck</span>
+                    <strong>{selectedHolodeckLog ? formatHolodeckLabel(selectedHolodeckLog) : selectedHolodeckUnit ? formatHolodeckLabel(selectedHolodeckUnit) : 'Not selected'}</strong>
+                  </div>
+                  <div className="metric">
+                    <span>Originator</span>
+                    <strong>{selectedHolodeckLog?.created_by || selectedHolodeckProgram?.created_by || 'Unknown'}</strong>
+                  </div>
+                  <div className="metric">
+                    <span>Stardate</span>
+                    <strong>{selectedHolodeckLog?.stardate || holodeckLogForm.stardate || 'Pending'}</strong>
+                  </div>
+                </div>
+
+                <div className="profile-note">
+                  <span className="eyebrow">Console Guidance</span>
+                  <p>Use this console to track who ran what, where, and when. Program authorship stays with the library record, while each session captures the crew behavior.</p>
+                </div>
+              </div>
+
+              <div className="panel panel-detail">
+                <div className="detail-tabs">
+                  <button type="button" className={`detail-tab ${holodeckTab === 'detail' ? 'active' : ''}`} onClick={() => setHolodeckTab('detail')}>Log Detail</button>
+                  <button type="button" className={`detail-tab ${holodeckTab === 'newlog' ? 'active' : ''}`} onClick={() => setHolodeckTab('newlog')}>New Log</button>
+                  <button type="button" className={`detail-tab ${holodeckTab === 'programs' ? 'active' : ''}`} onClick={() => setHolodeckTab('programs')}>Program Library</button>
+                  <button type="button" className={`detail-tab ${holodeckTab === 'newprogram' ? 'active' : ''}`} onClick={() => setHolodeckTab('newprogram')}>New Program</button>
+                </div>
+
+                {holodeckTab === 'detail' ? (
+                  <div className="detail-pane">
+                    <div className="panel-subheader">
+                      <span className="eyebrow">Selected Holodeck Event</span>
+                      <strong>{selectedHolodeckLog ? 'Session Loaded' : 'No Log Selected'}</strong>
+                    </div>
+
+                    {selectedHolodeckLog ? (
+                      <div className="timeline">
+                        <article className="timeline-entry">
+                          <div className="timeline-badge">HLD</div>
+                          <div>
+                            <strong>{selectedHolodeckLog.program_name || selectedHolodeckLog.program_id}</strong>
+                            <p>Crew: {formatRecordName(selectedHolodeckLog)}</p>
+                            <p>Holodeck: {formatHolodeckLabel(selectedHolodeckLog)}</p>
+                            <p>Stardate: {selectedHolodeckLog.stardate || 'Not recorded'}</p>
+                            <p>Created By: {selectedHolodeckLog.created_by || 'Unknown'} | Genre: {selectedHolodeckLog.genre || 'Unspecified'}</p>
+                          </div>
+                        </article>
+                      </div>
+                    ) : (
+                      <div className="empty-state">Select an entry from the holodeck log, or open the New Log tab to file a fresh session.</div>
+                    )}
+                  </div>
+                ) : null}
+
+                {holodeckTab === 'newlog' ? (
+                  <div className="detail-pane">
+                    <div className="panel-subheader">
+                      <span className="eyebrow">New Holodeck Session</span>
+                      <strong>Record A Program Run</strong>
+                    </div>
+
+                    <form className="action-form" onSubmit={handleHolodeckLogSubmit}>
+                      <div className="action-grid">
+                        <label className="control">
+                          <span>Crew Member</span>
+                          <select name="crew_id" value={holodeckLogForm.crew_id} onChange={handleHolodeckLogChange} required>
+                            <option value="">Select Crew</option>
+                            {replicatorCrewOptions.map((member) => (
+                              <option key={`holodeck-crew-${member.crew_id}`} value={member.crew_id}>
+                                {formatRecordName(member)}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+
+                        <label className="control">
+                          <span>Holodeck Bay</span>
+                          <select name="holodeck_id" value={holodeckLogForm.holodeck_id} onChange={handleHolodeckLogChange} required>
+                            <option value="">Select Bay</option>
+                            {holodeckUnits.map((unit) => (
+                              <option key={unit.holodeck_id} value={unit.holodeck_id}>
+                                {formatHolodeckLabel(unit)}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+
+                        <label className="control">
+                          <span>Program</span>
+                          <select name="program_id" value={holodeckLogForm.program_id} onChange={handleHolodeckLogChange} required>
+                            <option value="">Select Program</option>
+                            {holodeckPrograms.map((program) => (
+                              <option key={`holodeck-program-${program.program_id}`} value={program.program_id}>
+                                {program.program_name} | {program.holodeck_designation || program.holodeck_id}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+
+                        <label className="control">
+                          <span>Season</span>
+                          <select name="episode_season" value={holodeckLogForm.episode_season} onChange={handleHolodeckSeasonChange}>
+                            <option value="">Manual Stardate Entry</option>
+                            {VOYAGER_EPISODE_GUIDE.map((entry) => (
+                              <option key={`holodeck-${entry.season}`} value={entry.season}>
+                                {entry.season}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+
+                        <label className="control">
+                          <span>Episode</span>
+                          <select
+                            name="episode_title"
+                            value={holodeckLogForm.episode_title}
+                            onChange={handleHolodeckEpisodeChange}
+                            disabled={!holodeckLogForm.episode_season}
+                          >
+                            <option value="">{holodeckLogForm.episode_season ? 'Select Episode' : 'Choose Season First'}</option>
+                            {(selectedHolodeckSeasonGuide?.episodes || []).map(([title]) => (
+                              <option key={`holodeck-episode-${title}`} value={title}>
+                                {title}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+
+                        <label className="control">
+                          <span>Stardate</span>
+                          <input name="stardate" value={holodeckLogForm.stardate} onChange={handleHolodeckLogChange} placeholder="48658.2" required />
+                        </label>
+                      </div>
+
+                      <div className="action-preview">
+                        <span className="eyebrow">Preview</span>
+                        <p>
+                          {selectedHolodeckCrew ? formatRecordName(selectedHolodeckCrew) : 'Crew pending'} |{' '}
+                          {selectedHolodeckProgram?.program_name || 'Program pending'} |{' '}
+                          {selectedHolodeckUnit ? formatHolodeckLabel(selectedHolodeckUnit) : 'Holodeck pending'}
+                        </p>
+                      </div>
+
+                      <button className="submit-button" type="submit" disabled={submittingHolodeck}>
+                        {submittingHolodeck ? 'Logging Session...' : 'Log Holodeck Session'}
+                      </button>
+                    </form>
+                  </div>
+                ) : null}
+
+                {holodeckTab === 'programs' ? (
+                  <div className="detail-pane">
+                    <div className="panel-subheader">
+                      <span className="eyebrow">Program Library</span>
+                      <strong>{holodeckPrograms.length} programs in scope</strong>
+                    </div>
+
+                    <div className="timeline">
+                      {holodeckPrograms.length ? (
+                        holodeckPrograms.map((program) => (
+                          <article key={`library-${program.program_id}`} className="timeline-entry">
+                            <div className="timeline-badge">PRG</div>
+                            <div>
+                              <strong>{program.program_name}</strong>
+                              <p>{formatHolodeckLabel(program)} | Genre: {program.genre || 'Unspecified'}</p>
+                              <p>Created By: {program.created_by || 'Unknown'} | Access Level: {program.access_level || 'Not specified'}</p>
+                              <p>{program.description || 'No program description is currently on file.'}</p>
+                            </div>
+                          </article>
+                        ))
+                      ) : (
+                        <div className="empty-state">No holodeck programs match the current search.</div>
+                      )}
+                    </div>
+                  </div>
+                ) : null}
+
+                {holodeckTab === 'newprogram' ? (
+                  <div className="detail-pane">
+                    <div className="panel-subheader">
+                      <span className="eyebrow">Program Authoring</span>
+                      <strong>Add New Holodeck Program</strong>
+                    </div>
+
+                    <form className="action-form" onSubmit={handleHolodeckProgramSubmit}>
+                      <div className="action-grid">
+                        <label className="control">
+                          <span>Program Name</span>
+                          <input name="program_name" value={holodeckProgramForm.program_name} onChange={handleHolodeckProgramChange} placeholder="Bride of Chaotica!" required />
+                        </label>
+
+                        <label className="control">
+                          <span>Home Holodeck</span>
+                          <select name="holodeck_id" value={holodeckProgramForm.holodeck_id} onChange={handleHolodeckProgramChange} required>
+                            <option value="">Select Bay</option>
+                            {holodeckUnits.map((unit) => (
+                              <option key={`authoring-${unit.holodeck_id}`} value={unit.holodeck_id}>
+                                {formatHolodeckLabel(unit)}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+
+                        <label className="control">
+                          <span>Created By</span>
+                          <input name="created_by" value={holodeckProgramForm.created_by} onChange={handleHolodeckProgramChange} placeholder="Tom Paris" />
+                        </label>
+
+                        <label className="control">
+                          <span>Access Level</span>
+                          <input name="access_level" value={holodeckProgramForm.access_level} onChange={handleHolodeckProgramChange} placeholder="Unrestricted" />
+                        </label>
+
+                        <label className="control">
+                          <span>Genre</span>
+                          <input name="genre" value={holodeckProgramForm.genre} onChange={handleHolodeckProgramChange} placeholder="Sci-Fi Serial" />
+                        </label>
+                      </div>
+
+                      <label className="control">
+                        <span>Description</span>
+                        <textarea name="description" value={holodeckProgramForm.description} onChange={handleHolodeckProgramChange} placeholder="Pulp serial adventure with Arachnia, Death Ray theatrics, and melodramatic villain entrances." rows="4" />
+                      </label>
+
+                      <div className="action-preview">
+                        <span className="eyebrow">Library Preview</span>
+                        <p>
+                          {holodeckProgramForm.program_name || 'Program pending'} |{' '}
+                          {holodeckProgramForm.created_by || 'Creator pending'} |{' '}
+                          {holodeckUnits.find((unit) => unit.holodeck_id === holodeckProgramForm.holodeck_id)
+                            ? formatHolodeckLabel(holodeckUnits.find((unit) => unit.holodeck_id === holodeckProgramForm.holodeck_id))
+                            : 'Holodeck pending'}
+                        </p>
+                      </div>
+
+                      <button className="submit-button" type="submit" disabled={submittingHolodeckProgram}>
+                        {submittingHolodeckProgram ? 'Adding Program...' : 'Add Holodeck Program'}
+                      </button>
+                    </form>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {selectedCompartment && activeWorkspace === 'systems' ? (
         <div className="dossier-overlay" onClick={() => setSelectedCompartmentId(null)}>
           <div
@@ -3170,7 +3791,7 @@ function App() {
 
                 <div className="profile-note">
                   <span className="eyebrow">Compartment Notes</span>
-                  <p>This view tracks what is installed in the space itself. Usage history belongs to the Replicator and Transporter workspaces.</p>
+                  <p>This view tracks what is installed in the space itself. Usage history lives in the dedicated activity workspaces, while this panel stays focused on room inventory.</p>
                 </div>
               </div>
 
