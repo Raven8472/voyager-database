@@ -214,23 +214,39 @@ Example error response:
   "error": "Crew member not found"
 }
 
-Setup (Local Development)
+Setup (API Configuration)
 Environment Variables
+
+The API loads credentials from `api/.env`, which is ignored by Git. Use `api/.env.example` as the safe template committed to the repository.
 
 The API requires the following environment variables to connect to MySQL:
 
-DB_HOST=localhost
+DB_HOST=your-ubuntu-db-host
+DB_PORT=3306
 DB_USER=your_mysql_user
 DB_PASSWORD=your_mysql_password
 DB_NAME=Voyager_Database
 
-Run the API
-uvicorn main:app --reload
+If the database is running on a separate Ubuntu laptop or server, set `DB_HOST` to that machine's network address rather than `localhost`.
+
+Run the API from the `api/` directory:
+uvicorn src.main:app --reload
 
 
 Swagger UI will be available at:
 
 http://127.0.0.1:8000/docs
+
+Remote database checklist
+
+If the API runs on your Windows machine while MySQL runs on an Ubuntu laptop or server:
+
+- Set `DB_HOST` to the Ubuntu machine's LAN IP or DNS name.
+- Keep `DB_PORT` at `3306` unless MySQL is intentionally exposed on a different port.
+- Make sure MySQL is not bound only to `127.0.0.1`.
+- Make sure the Ubuntu firewall allows inbound MySQL traffic.
+- Make sure the MySQL user can connect from your Windows host, not just `localhost`.
+- Load the Voyager schema and seed data into the database named by `DB_NAME`.
 
 Project Status
 
