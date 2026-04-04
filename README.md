@@ -25,6 +25,24 @@ The current portal includes these workstation areas:
 
 Authentication is enabled in V1, and user-created records are stored in dedicated save-data tables so base reference data stays intact.
 
+## Screenshots
+
+### Personnel Workspace
+
+![Personnel workspace](docs/screenshots/personnel-workspace.png)
+
+### Ship Systems Workspace
+
+![Ship Systems workspace](docs/screenshots/ship-systems-workspace.png)
+
+### Personnel Status Feedback
+
+![Personnel status message](docs/screenshots/personnel-status-message.png)
+
+### Replicator Console
+
+![Replicator console](docs/screenshots/replicator-console.png)
+
 ## Data Model Snapshot
 
 ### Base schema
