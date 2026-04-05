@@ -4,11 +4,19 @@ import AppOverlays from './components/AppOverlays';
 import AuthScreen from './components/AuthScreen';
 import LcarsShell from './components/LcarsShell';
 import WorkspaceContent from './components/WorkspaceContent';
+import { useAuthBootstrap } from './hooks/useAuthBootstrap';
+import { useCrewWorkspace } from './hooks/useCrewWorkspace';
+import { useHolodeckWorkspace } from './hooks/useHolodeckWorkspace';
+import { useActivitySubmitHandlers } from './hooks/useActivitySubmitHandlers';
+import { useMedicalWorkspace } from './hooks/useMedicalWorkspace';
+import { usePersonnelMedicalSubmitHandlers } from './hooks/usePersonnelMedicalSubmitHandlers';
+import { useReplicatorWorkspace } from './hooks/useReplicatorWorkspace';
+import { useSystemsWorkspace } from './hooks/useSystemsWorkspace';
+import { useTransporterWorkspace } from './hooks/useTransporterWorkspace';
 import {
   API_BASE_URL,
   AUTH_STORAGE_KEY,
   CREW_PAGE_SIZE,
-  VOYAGER_EPISODE_GUIDE,
   initialAuthForm,
   initialCrewCreateForm,
   initialFormState,
@@ -20,29 +28,15 @@ import {
   initialReplicatorPatternForm,
   initialTransporterLogForm,
 } from './lib/constants';
-async function apiFetch(path, options = {}) {
-  const token = window.localStorage.getItem(AUTH_STORAGE_KEY);
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(options.headers || {}),
-    },
-    ...options,
-  });
-
-  const data = await response.json();
-
-  if (!response.ok) {
-    throw new Error(data.detail || data.error || 'Request failed');
-  }
-
-  if (data.error) {
-    throw new Error(data.error);
-  }
-
-  return data;
-}
+import { apiFetch } from './lib/api';
+import {
+  applyEpisodeSelection,
+  findSeasonGuide,
+  resetEpisodeFields,
+  updateNamedInputValue,
+  updateNamedValue,
+} from './lib/episodeForms';
+import { getWorkspaceMeta } from './lib/workspaceMeta';
 
 function App() {
   const [authToken, setAuthToken] = useState(() => window.localStorage.getItem(AUTH_STORAGE_KEY) || '');
@@ -133,485 +127,206 @@ function App() {
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
   const dossierRef = useRef(null);
-  const selectedSeasonGuide = VOYAGER_EPISODE_GUIDE.find((entry) => entry.season === formState.episode_season);
-  const selectedMedicalSeasonGuide = VOYAGER_EPISODE_GUIDE.find((entry) => entry.season === medicalRecordForm.episode_season);
-  const selectedTransporterSeasonGuide = VOYAGER_EPISODE_GUIDE.find((entry) => entry.season === transporterLogForm.episode_season);
-  const selectedReplicatorSeasonGuide = VOYAGER_EPISODE_GUIDE.find((entry) => entry.season === replicatorLogForm.episode_season);
-  const selectedHolodeckSeasonGuide = VOYAGER_EPISODE_GUIDE.find((entry) => entry.season === holodeckLogForm.episode_season);
-
-  useEffect(() => {
-    async function loadCurrentUser() {
-      if (!authToken) {
-        setAuthLoading(false);
-        return;
-      }
-
-      try {
-        const authData = await apiFetch('/auth/me');
-        setCurrentUser(authData.user);
-      } catch (loadError) {
-        window.localStorage.removeItem(AUTH_STORAGE_KEY);
-        setAuthToken('');
-        setCurrentUser(null);
-        setError(loadError.message);
-      } finally {
-        setAuthLoading(false);
-      }
-    }
-
-    loadCurrentUser();
-  }, [authToken]);
-
-  useEffect(() => {
-    async function loadMeta() {
-      if (!currentUser) {
-        return;
-      }
-
-      try {
-        const [healthData, departmentData, actionData] = await Promise.all([
-          apiFetch('/health'),
-          apiFetch('/departments'),
-          apiFetch('/personnel-actions/recent'),
-        ]);
-        setHealth(healthData);
-        setDepartments(departmentData);
-        setRecentActions(actionData);
-      } catch (loadError) {
-        setError(loadError.message);
-      }
-    }
-
-    loadMeta();
-  }, [currentUser]);
-
-  useEffect(() => {
-    async function loadCrew() {
-      if (!currentUser) {
-        setLoadingCrew(false);
-        return;
-      }
-
-      setLoadingCrew(true);
-      setError('');
-
-      const params = new URLSearchParams();
-      if (search.trim()) {
-        params.set('search', search.trim());
-      }
-      if (designation) {
-        params.set('designation', designation);
-      }
-      if (departmentFilter) {
-        params.set('department_id', departmentFilter);
-      }
-
-      try {
-        const crewData = await apiFetch(`/crew${params.toString() ? `?${params.toString()}` : ''}`);
-        setCrew(crewData);
-
-        if (!crewData.length) {
-          setSelectedCrewId(null);
-          setSelectedCrew(null);
-          return;
-        }
-
-        const stillVisible = crewData.some((person) => person.crew_id === selectedCrewId);
-        if (selectedCrewId && !stillVisible) {
-          setSelectedCrewId(null);
-          setSelectedCrew(null);
-        }
-      } catch (loadError) {
-        setError(loadError.message);
-      } finally {
-        setLoadingCrew(false);
-      }
-    }
-
-    loadCrew();
-  }, [currentUser, search, designation, departmentFilter, selectedCrewId]);
-
-  useEffect(() => {
-    setCrewPage(1);
-  }, [search, designation, departmentFilter]);
-
-  useEffect(() => {
-    async function loadCrewDetail() {
-      if (!selectedCrewId) {
-        setSelectedCrew(null);
-        return;
-      }
-
-      setLoadingDetail(true);
-      setError('');
-
-      try {
-        const detail = await apiFetch(`/crew/${selectedCrewId}`);
-        setSelectedCrew(detail);
-        setDossierTab('history');
-        setFormState((current) => ({
-          ...initialFormState,
-          entered_by: current.entered_by || initialFormState.entered_by,
-          new_rank: detail.rank || '',
-          new_species: detail.species || '',
-          new_planet_of_origin: detail.planet_of_origin || '',
-          new_department_id: String(detail.department_id || ''),
-        }));
-      } catch (loadError) {
-        setError(loadError.message);
-      } finally {
-        setLoadingDetail(false);
-      }
-    }
-
-    loadCrewDetail();
-  }, [selectedCrewId]);
-
-  useEffect(() => {
-    async function loadMedicalCharts() {
-      if (!currentUser) {
-        setLoadingMedicalCharts(false);
-        return;
-      }
-
-      setLoadingMedicalCharts(true);
-      setError('');
-
-      const params = new URLSearchParams();
-      if (medicalSearch.trim()) {
-        params.set('search', medicalSearch.trim());
-      }
-
-      try {
-        const chartData = await apiFetch(`/medical/charts${params.toString() ? `?${params.toString()}` : ''}`);
-        setMedicalCharts(chartData);
-
-        if (!chartData.length) {
-          setSelectedMedicalCrewId(null);
-          setSelectedMedicalChart(null);
-          return;
-        }
-
-        const stillVisible = chartData.some((chart) => chart.crew_id === selectedMedicalCrewId);
-        if (selectedMedicalCrewId && !stillVisible) {
-          setSelectedMedicalCrewId(null);
-          setSelectedMedicalChart(null);
-        }
-      } catch (loadError) {
-        setError(loadError.message);
-      } finally {
-        setLoadingMedicalCharts(false);
-      }
-    }
-
-    loadMedicalCharts();
-  }, [currentUser, medicalSearch, selectedMedicalCrewId]);
-
-  useEffect(() => {
-    async function loadTransporterWorkspace() {
-      if (!currentUser) {
-        setLoadingTransporter(false);
-        return;
-      }
-
-      setLoadingTransporter(true);
-      setError('');
-
-      const params = new URLSearchParams();
-      if (transporterSearch.trim()) {
-        params.set('search', transporterSearch.trim());
-      }
-
-      try {
-        const [logResult, unitResult, locationResult, crewResult] = await Promise.allSettled([
-          apiFetch(`/transporter/logs${params.toString() ? `?${params.toString()}` : ''}`),
-          apiFetch('/transporter/units'),
-          apiFetch('/transporter/locations'),
-          apiFetch('/crew'),
-        ]);
-
-        if (logResult.status === 'fulfilled') {
-          setTransporterLogs(logResult.value);
-          if (selectedTransporterEventId && !logResult.value.some((event) => event.event_id === selectedTransporterEventId)) {
-            setSelectedTransporterEventId(null);
-            setSelectedTransporterEvent(null);
-          }
-        } else {
-          setTransporterLogs([]);
-          setError(logResult.reason.message);
-        }
-
-        if (unitResult.status === 'fulfilled') {
-          setTransporterUnits(unitResult.value);
-        } else {
-          setTransporterUnits([]);
-          setError(unitResult.reason.message);
-        }
-
-        if (locationResult.status === 'fulfilled') {
-          setTransporterLocations(locationResult.value);
-        } else {
-          setTransporterLocations([]);
-          setError(locationResult.reason.message);
-        }
-
-        if (crewResult.status === 'fulfilled') {
-          setReplicatorCrewOptions(crewResult.value);
-        } else {
-          setError(crewResult.reason.message);
-        }
-      } finally {
-        setLoadingTransporter(false);
-      }
-    }
-
-    loadTransporterWorkspace();
-  }, [currentUser, transporterSearch, selectedTransporterEventId]);
-
-  useEffect(() => {
-    async function loadHolodeckWorkspace() {
-      if (!currentUser) {
-        setLoadingHolodeck(false);
-        return;
-      }
-
-      setLoadingHolodeck(true);
-      setError('');
-
-      const params = new URLSearchParams();
-      if (holodeckSearch.trim()) {
-        params.set('search', holodeckSearch.trim());
-      }
-
-      try {
-        const [logData, programData, unitData, crewData] = await Promise.all([
-          apiFetch(`/holodeck/logs${params.toString() ? `?${params.toString()}` : ''}`),
-          apiFetch(`/holodeck/programs${params.toString() ? `?${params.toString()}` : ''}`),
-          apiFetch('/holodeck/units'),
-          apiFetch('/crew'),
-        ]);
-        setHolodeckLogs(logData);
-        setHolodeckPrograms(programData);
-        setHolodeckUnits(unitData);
-        setReplicatorCrewOptions(crewData);
-        if (selectedHolodeckLogId && !logData.some((log) => log.log_id === selectedHolodeckLogId)) {
-          setSelectedHolodeckLogId(null);
-          setSelectedHolodeckLog(null);
-        }
-      } catch (loadError) {
-        setError(loadError.message);
-      } finally {
-        setLoadingHolodeck(false);
-      }
-    }
-
-    loadHolodeckWorkspace();
-  }, [currentUser, holodeckSearch, selectedHolodeckLogId]);
-
-  useEffect(() => {
-    setHolodeckPage(1);
-  }, [holodeckSearch]);
-
-  useEffect(() => {
-    if (!selectedHolodeckLogId) {
-      setSelectedHolodeckLog(null);
-      return;
-    }
-
-    const matchingLog = holodeckLogs.find((log) => log.log_id === selectedHolodeckLogId) || null;
-    setSelectedHolodeckLog(matchingLog);
-  }, [holodeckLogs, selectedHolodeckLogId]);
-
-  useEffect(() => {
-    async function loadSystemsCompartments() {
-      if (!currentUser) {
-        setLoadingSystems(false);
-        return;
-      }
-
-      setLoadingSystems(true);
-      setError('');
-      const params = new URLSearchParams();
-      if (systemsSearch.trim()) {
-        params.set('search', systemsSearch.trim());
-      }
-      try {
-        const compartmentData = await apiFetch(`/systems/compartments${params.toString() ? `?${params.toString()}` : ''}`);
-        setSystemsCompartments(compartmentData);
-        if (!compartmentData.length) {
-          setSelectedCompartmentId(null);
-          setSelectedCompartment(null);
-          return;
-        }
-        const stillVisible = compartmentData.some((compartment) => compartment.compartment_id === selectedCompartmentId);
-        if (selectedCompartmentId && !stillVisible) {
-          setSelectedCompartmentId(null);
-          setSelectedCompartment(null);
-        }
-      } catch (loadError) {
-        setError(loadError.message);
-      } finally {
-        setLoadingSystems(false);
-      }
-    }
-    loadSystemsCompartments();
-  }, [currentUser, systemsSearch, selectedCompartmentId]);
-
-  useEffect(() => {
-    setSystemsPage(1);
-  }, [systemsSearch]);
-
-  useEffect(() => {
-    async function loadReplicatorWorkspace() {
-      if (!currentUser) {
-        setLoadingReplicator(false);
-        return;
-      }
-
-      setLoadingReplicator(true);
-      setError('');
-
-      const params = new URLSearchParams();
-      if (replicatorSearch.trim()) {
-        params.set('search', replicatorSearch.trim());
-      }
-
-      try {
-        const [logData, patternData, unitData] = await Promise.all([
-          apiFetch(`/replicator/logs${params.toString() ? `?${params.toString()}` : ''}`),
-          apiFetch(`/replicator/patterns${params.toString() ? `?${params.toString()}` : ''}`),
-          apiFetch(`/replicator/units${params.toString() ? `?${params.toString()}` : ''}`),
-        ]);
-        setReplicatorLogs(logData);
-        setReplicatorPatterns(patternData);
-        setReplicatorUnits(unitData);
-        if (selectedReplicatorLogId && !logData.some((log) => log.log_id === selectedReplicatorLogId)) {
-          setSelectedReplicatorLogId(null);
-          setSelectedReplicatorLog(null);
-        }
-      } catch (loadError) {
-        setError(loadError.message);
-      } finally {
-        setLoadingReplicator(false);
-      }
-    }
-
-    loadReplicatorWorkspace();
-  }, [currentUser, replicatorSearch, selectedReplicatorLogId]);
-
-  useEffect(() => {
-    async function loadReplicatorCrewOptions() {
-      if (!currentUser) {
-        return;
-      }
-
-      try {
-        const crewData = await apiFetch('/crew');
-        setReplicatorCrewOptions(crewData);
-      } catch (loadError) {
-        setError(loadError.message);
-      }
-    }
-
-    loadReplicatorCrewOptions();
-  }, [currentUser]);
-
-  useEffect(() => {
-    setReplicatorPage(1);
-  }, [replicatorSearch]);
-
-  useEffect(() => {
-    setReplicatorPatternPage(1);
-  }, [replicatorSearch]);
-
-  useEffect(() => {
-    if (!selectedReplicatorLogId) {
-      setSelectedReplicatorLog(null);
-      return;
-    }
-
-    const matchingLog = replicatorLogs.find((log) => log.log_id === selectedReplicatorLogId) || null;
-    setSelectedReplicatorLog(matchingLog);
-  }, [replicatorLogs, selectedReplicatorLogId]);
-
-  useEffect(() => {
-    async function loadCompartmentDetail() {
-      if (!currentUser) {
-        setSelectedCompartment(null);
-        return;
-      }
-
-      if (!selectedCompartmentId) {
-        setSelectedCompartment(null);
-        return;
-      }
-      setLoadingSystemDetail(true);
-      setError('');
-      try {
-        const detail = await apiFetch(`/systems/compartments/${selectedCompartmentId}`);
-        setSelectedCompartment(detail);
-      } catch (loadError) {
-        setError(loadError.message);
-      } finally {
-        setLoadingSystemDetail(false);
-      }
-    }
-    loadCompartmentDetail();
-  }, [currentUser, selectedCompartmentId]);
-
-  useEffect(() => {
-    setMedicalPage(1);
-  }, [medicalSearch]);
-
-  useEffect(() => {
-    setTransporterPage(1);
-  }, [transporterSearch]);
-
-  useEffect(() => {
-    if (!selectedTransporterEventId) {
-      setSelectedTransporterEvent(null);
-      return;
-    }
-
-    const matchingEvent = transporterLogs.find((event) => event.event_id === selectedTransporterEventId) || null;
-    setSelectedTransporterEvent(matchingEvent);
-  }, [transporterLogs, selectedTransporterEventId]);
-
-  useEffect(() => {
-    async function loadMedicalChartDetail() {
-      if (!currentUser) {
-        setSelectedMedicalChart(null);
-        return;
-      }
-
-      if (!selectedMedicalCrewId) {
-        setSelectedMedicalChart(null);
-        return;
-      }
-
-      setLoadingMedicalDetail(true);
-      setError('');
-
-      try {
-        const detail = await apiFetch(`/medical/charts/${selectedMedicalCrewId}`);
-        setSelectedMedicalChart(detail);
-        setMedicalTab('profile');
-        setMedicalProfileForm({
-          blood_type: detail.medical_profile?.blood_type || '',
-          allergies: detail.medical_profile?.allergies || '',
-          chronic_conditions: detail.medical_profile?.chronic_conditions || '',
-          emergency_contact: detail.medical_profile?.emergency_contact || '',
-        });
-        setMedicalRecordForm(initialMedicalRecordForm);
-      } catch (loadError) {
-        setError(loadError.message);
-      } finally {
-        setLoadingMedicalDetail(false);
-      }
-    }
-
-    loadMedicalChartDetail();
-  }, [currentUser, selectedMedicalCrewId]);
+  const selectedSeasonGuide = findSeasonGuide(formState.episode_season);
+  const selectedMedicalSeasonGuide = findSeasonGuide(medicalRecordForm.episode_season);
+  const selectedTransporterSeasonGuide = findSeasonGuide(transporterLogForm.episode_season);
+  const selectedReplicatorSeasonGuide = findSeasonGuide(replicatorLogForm.episode_season);
+  const selectedHolodeckSeasonGuide = findSeasonGuide(holodeckLogForm.episode_season);
+
+  useAuthBootstrap({
+    apiFetch,
+    authToken,
+    setAuthLoading,
+    setAuthToken,
+    setCurrentUser,
+    setDepartments,
+    setError,
+    setHealth,
+    setRecentActions,
+  });
+
+  useCrewWorkspace({
+    apiFetch,
+    currentUser,
+    departmentFilter,
+    designation,
+    initialFormState,
+    search,
+    selectedCrewId,
+    setCrew,
+    setCrewPage,
+    setDossierTab,
+    setError,
+    setFormState,
+    setLoadingCrew,
+    setLoadingDetail,
+    setSelectedCrew,
+    setSelectedCrewId,
+  });
+
+  const { refreshTransporterWorkspace } = useTransporterWorkspace({
+    apiFetch,
+    currentUser,
+    selectedTransporterEventId,
+    setError,
+    setLoadingTransporter,
+    setReplicatorCrewOptions,
+    setSelectedTransporterEvent,
+    setSelectedTransporterEventId,
+    setTransporterLocations,
+    setTransporterLogs,
+    setTransporterPage,
+    setTransporterUnits,
+    transporterLogs,
+    transporterSearch,
+  });
+
+  const { refreshHolodeckWorkspace } = useHolodeckWorkspace({
+    apiFetch,
+    currentUser,
+    holodeckLogs,
+    holodeckSearch,
+    selectedHolodeckLogId,
+    setError,
+    setHolodeckPage,
+    setHolodeckPrograms,
+    setHolodeckUnits,
+    setLoadingHolodeck,
+    setReplicatorCrewOptions,
+    setSelectedHolodeckLog,
+    setSelectedHolodeckLogId,
+    setHolodeckLogs,
+  });
+
+  const { refreshReplicatorWorkspace } = useReplicatorWorkspace({
+    apiFetch,
+    currentUser,
+    replicatorLogs,
+    replicatorSearch,
+    selectedReplicatorLogId,
+    setError,
+    setLoadingReplicator,
+    setReplicatorCrewOptions,
+    setReplicatorLogs,
+    setReplicatorPage,
+    setReplicatorPatternPage,
+    setReplicatorPatterns,
+    setReplicatorUnits,
+    setSelectedReplicatorLog,
+    setSelectedReplicatorLogId,
+  });
+
+  const { refreshMedicalChart } = useMedicalWorkspace({
+    apiFetch,
+    currentUser,
+    initialMedicalRecordForm,
+    medicalCharts,
+    medicalSearch,
+    selectedMedicalCrewId,
+    setError,
+    setLoadingMedicalCharts,
+    setLoadingMedicalDetail,
+    setMedicalCharts,
+    setMedicalPage,
+    setMedicalProfileForm,
+    setMedicalRecordForm,
+    setMedicalTab,
+    setSelectedMedicalChart,
+    setSelectedMedicalCrewId,
+  });
+
+  useSystemsWorkspace({
+    apiFetch,
+    currentUser,
+    selectedCompartmentId,
+    setError,
+    setLoadingSystemDetail,
+    setLoadingSystems,
+    setSelectedCompartment,
+    setSelectedCompartmentId,
+    setSystemsCompartments,
+    setSystemsPage,
+    systemsSearch,
+  });
+
+  const {
+    handleHolodeckLogSubmit,
+    handleHolodeckProgramSubmit,
+    handleReplicatorLogSubmit,
+    handleReplicatorPatternSubmit,
+    handleTransporterLogSubmit,
+  } = useActivitySubmitHandlers({
+    apiFetch,
+    handleSetError: setError,
+    handleSetSuccess: setSuccessMessage,
+    holodeckLogForm,
+    holodeckProgramForm,
+    initialHolodeckLogForm,
+    initialHolodeckProgramForm,
+    initialReplicatorLogForm,
+    initialReplicatorPatternForm,
+    initialTransporterLogForm,
+    refreshHolodeckWorkspace,
+    refreshReplicatorWorkspace,
+    refreshTransporterWorkspace,
+    replicatorLogForm,
+    replicatorPatternForm,
+    setHolodeckLogForm,
+    setHolodeckProgramForm,
+    setHolodeckTab,
+    setReplicatorLogForm,
+    setReplicatorPatternForm,
+    setReplicatorTab,
+    setSelectedHolodeckLogId,
+    setSelectedReplicatorLogId,
+    setSelectedTransporterEventId,
+    setShowHolodeckConsole,
+    setShowReplicatorConsole,
+    setShowTransporterConsole,
+    setSubmittingHolodeck,
+    setSubmittingHolodeckProgram,
+    setSubmittingReplicator,
+    setSubmittingReplicatorPattern,
+    setSubmittingTransporter,
+    setTransporterLogForm,
+    setTransporterTab,
+    transporterLogForm,
+  });
+
+  const {
+    handleCrewCreateSubmit,
+    handleMedicalProfileSubmit,
+    handleMedicalRecordSubmit,
+    handleSubmit,
+  } = usePersonnelMedicalSubmitHandlers({
+    apiFetch,
+    crewCreateForm,
+    formState,
+    handleSetError: setError,
+    handleSetSuccess: setSuccessMessage,
+    initialCrewCreateForm,
+    initialFormState,
+    initialMedicalRecordForm,
+    medicalProfileForm,
+    medicalRecordForm,
+    refreshMedicalChart,
+    selectedCrew,
+    selectedMedicalChart,
+    setCrew,
+    setCrewCreateForm,
+    setFormState,
+    setHealth,
+    setMedicalRecordForm,
+    setMedicalTab,
+    setRecentActions,
+    setReplicatorCrewOptions,
+    setSelectedCrew,
+    setSelectedCrewId,
+    setShowCrewCreate,
+    setSubmitting,
+    setSubmittingCrewCreate,
+    setSubmittingMedical,
+  });
 
   useEffect(() => {
     if (selectedCrew && dossierRef.current) {
@@ -619,262 +334,88 @@ function App() {
     }
   }, [selectedCrew]);
 
-  async function refreshAfterAction(crewId) {
-    const [detail, actionData, healthData] = await Promise.all([
-      apiFetch(`/crew/${crewId}`),
-      apiFetch('/personnel-actions/recent'),
-      apiFetch('/health'),
-    ]);
-
-    setSelectedCrew(detail);
-    setRecentActions(actionData);
-    setHealth(healthData);
-
-    const crewData = await apiFetch('/crew');
-    setCrew(crewData);
-    return detail;
-  }
-
-  async function refreshMedicalChart(crewId) {
-    const params = new URLSearchParams();
-    if (medicalSearch.trim()) {
-      params.set('search', medicalSearch.trim());
-    }
-
-    const [detail, chartData] = await Promise.all([
-      apiFetch(`/medical/charts/${crewId}`),
-      apiFetch(`/medical/charts${params.toString() ? `?${params.toString()}` : ''}`),
-    ]);
-
-    setSelectedMedicalChart(detail);
-    setMedicalCharts(chartData);
-    return detail;
-  }
-
-  async function refreshReplicatorWorkspace() {
-    const params = new URLSearchParams();
-    if (replicatorSearch.trim()) {
-      params.set('search', replicatorSearch.trim());
-    }
-
-    const [logData, patternData, unitData, crewData] = await Promise.all([
-      apiFetch(`/replicator/logs${params.toString() ? `?${params.toString()}` : ''}`),
-      apiFetch(`/replicator/patterns${params.toString() ? `?${params.toString()}` : ''}`),
-      apiFetch(`/replicator/units${params.toString() ? `?${params.toString()}` : ''}`),
-      apiFetch('/crew'),
-    ]);
-
-    setReplicatorLogs(logData);
-    setReplicatorPatterns(patternData);
-    setReplicatorUnits(unitData);
-    setReplicatorCrewOptions(crewData);
-    return logData;
-  }
-
-  async function refreshTransporterWorkspace() {
-    const params = new URLSearchParams();
-    if (transporterSearch.trim()) {
-      params.set('search', transporterSearch.trim());
-    }
-
-    const [logData, unitData, locationData, crewData] = await Promise.all([
-      apiFetch(`/transporter/logs${params.toString() ? `?${params.toString()}` : ''}`),
-      apiFetch('/transporter/units'),
-      apiFetch('/transporter/locations'),
-      apiFetch('/crew'),
-    ]);
-
-    setTransporterLogs(logData);
-    setTransporterUnits(unitData);
-    setTransporterLocations(locationData);
-    setReplicatorCrewOptions(crewData);
-    return logData;
-  }
-
-  async function refreshHolodeckWorkspace() {
-    const params = new URLSearchParams();
-    if (holodeckSearch.trim()) {
-      params.set('search', holodeckSearch.trim());
-    }
-
-    const [logData, programData, unitData, crewData] = await Promise.all([
-      apiFetch(`/holodeck/logs${params.toString() ? `?${params.toString()}` : ''}`),
-      apiFetch(`/holodeck/programs${params.toString() ? `?${params.toString()}` : ''}`),
-      apiFetch('/holodeck/units'),
-      apiFetch('/crew'),
-    ]);
-
-    setHolodeckLogs(logData);
-    setHolodeckPrograms(programData);
-    setHolodeckUnits(unitData);
-    setReplicatorCrewOptions(crewData);
-    return { logData, programData, unitData };
-  }
-
   function handleFormChange(event) {
-    const { name, value } = event.target;
-    setFormState((current) => ({
-      ...current,
-      [name]: value,
-    }));
+    updateNamedValue(setFormState, event);
   }
 
   function handleSeasonChange(event) {
     const season = event.target.value;
-    setFormState((current) => ({
-      ...current,
-      episode_season: season,
-      episode_title: '',
-      effective_stardate: '',
-      episode_reference: '',
-    }));
+    resetEpisodeFields(setFormState, season, ['effective_stardate', 'episode_reference']);
   }
 
   function handleEpisodeChange(event) {
-    const episodeTitle = event.target.value;
-    const selectedEpisode = selectedSeasonGuide?.episodes.find(([title]) => title === episodeTitle);
-    setFormState((current) => ({
-      ...current,
-      episode_title: episodeTitle,
-      effective_stardate: selectedEpisode?.[1] || current.effective_stardate,
-      episode_reference: selectedEpisode ? `${current.episode_season} - ${episodeTitle}` : current.episode_reference,
-    }));
+    applyEpisodeSelection(setFormState, selectedSeasonGuide, event.target.value, {
+      stardateField: 'effective_stardate',
+      referenceField: 'episode_reference',
+    });
   }
 
   function handleMedicalProfileChange(event) {
-    const { name, value } = event.target;
-    setMedicalProfileForm((current) => ({
-      ...current,
-      [name]: value,
-    }));
+    updateNamedValue(setMedicalProfileForm, event);
   }
 
   function handleMedicalRecordChange(event) {
-    const { name, value, type, checked } = event.target;
-    setMedicalRecordForm((current) => ({
-      ...current,
-      [name]: type === 'checkbox' ? checked : value,
-    }));
+    updateNamedInputValue(setMedicalRecordForm, event);
   }
 
   function handleMedicalRecordSeasonChange(event) {
-    const season = event.target.value;
-    setMedicalRecordForm((current) => ({
-      ...current,
-      episode_season: season,
-      episode_title: '',
-      visit_stardate: '',
-    }));
+    resetEpisodeFields(setMedicalRecordForm, event.target.value, ['visit_stardate']);
   }
 
   function handleMedicalRecordEpisodeChange(event) {
-    const episodeTitle = event.target.value;
-    const selectedEpisode = selectedMedicalSeasonGuide?.episodes.find(([title]) => title === episodeTitle);
-    setMedicalRecordForm((current) => ({
-      ...current,
-      episode_title: episodeTitle,
-      visit_stardate: selectedEpisode?.[1] || current.visit_stardate,
-    }));
+    applyEpisodeSelection(setMedicalRecordForm, selectedMedicalSeasonGuide, event.target.value, {
+      stardateField: 'visit_stardate',
+    });
   }
 
   function handleCrewCreateChange(event) {
-    const { name, value } = event.target;
-    setCrewCreateForm((current) => ({
-      ...current,
-      [name]: value,
-    }));
+    updateNamedValue(setCrewCreateForm, event);
   }
 
   function handleAuthChange(event) {
-    const { name, value } = event.target;
-    setAuthForm((current) => ({
-      ...current,
-      [name]: value,
-    }));
+    updateNamedValue(setAuthForm, event);
   }
 
   function handleReplicatorLogChange(event) {
-    const { name, value } = event.target;
-    setReplicatorLogForm((current) => ({
-      ...current,
-      [name]: value,
-    }));
+    updateNamedValue(setReplicatorLogForm, event);
   }
 
   function handleReplicatorSeasonChange(event) {
-    const season = event.target.value;
-    setReplicatorLogForm((current) => ({
-      ...current,
-      episode_season: season,
-      episode_title: '',
-      timestamp: '',
-    }));
+    resetEpisodeFields(setReplicatorLogForm, event.target.value, ['timestamp']);
   }
 
   function handleReplicatorEpisodeChange(event) {
-    const episodeTitle = event.target.value;
-    const selectedEpisode = selectedReplicatorSeasonGuide?.episodes.find(([title]) => title === episodeTitle);
-    setReplicatorLogForm((current) => ({
-      ...current,
-      episode_title: episodeTitle,
-      timestamp: selectedEpisode?.[1] || current.timestamp,
-    }));
+    applyEpisodeSelection(setReplicatorLogForm, selectedReplicatorSeasonGuide, event.target.value, {
+      stardateField: 'timestamp',
+    });
   }
 
   function handleHolodeckLogChange(event) {
-    const { name, value } = event.target;
-    setHolodeckLogForm((current) => ({
-      ...current,
-      [name]: value,
-    }));
+    updateNamedValue(setHolodeckLogForm, event);
   }
 
   function handleHolodeckSeasonChange(event) {
-    const season = event.target.value;
-    setHolodeckLogForm((current) => ({
-      ...current,
-      episode_season: season,
-      episode_title: '',
-      stardate: '',
-    }));
+    resetEpisodeFields(setHolodeckLogForm, event.target.value, ['stardate']);
   }
 
   function handleHolodeckEpisodeChange(event) {
-    const episodeTitle = event.target.value;
-    const selectedEpisode = selectedHolodeckSeasonGuide?.episodes.find(([title]) => title === episodeTitle);
-    setHolodeckLogForm((current) => ({
-      ...current,
-      episode_title: episodeTitle,
-      stardate: selectedEpisode?.[1] || current.stardate,
-    }));
+    applyEpisodeSelection(setHolodeckLogForm, selectedHolodeckSeasonGuide, event.target.value, {
+      stardateField: 'stardate',
+    });
   }
 
   function handleTransporterChange(event) {
-    const { name, value } = event.target;
-    setTransporterLogForm((current) => ({
-      ...current,
-      [name]: value,
-    }));
+    updateNamedValue(setTransporterLogForm, event);
   }
 
   function handleTransporterSeasonChange(event) {
-    const season = event.target.value;
-    setTransporterLogForm((current) => ({
-      ...current,
-      episode_season: season,
-      episode_title: '',
-      stardate: '',
-    }));
+    resetEpisodeFields(setTransporterLogForm, event.target.value, ['stardate']);
   }
 
   function handleTransporterEpisodeChange(event) {
-    const episodeTitle = event.target.value;
-    const selectedEpisode = selectedTransporterSeasonGuide?.episodes.find(([title]) => title === episodeTitle);
-    setTransporterLogForm((current) => ({
-      ...current,
-      episode_title: episodeTitle,
-      stardate: selectedEpisode?.[1] || current.stardate,
-    }));
+    applyEpisodeSelection(setTransporterLogForm, selectedTransporterSeasonGuide, event.target.value, {
+      stardateField: 'stardate',
+    });
   }
 
   function handleTransporterPassengerChange(index, value) {
@@ -889,19 +430,11 @@ function App() {
   }
 
   function handleReplicatorPatternChange(event) {
-    const { name, value } = event.target;
-    setReplicatorPatternForm((current) => ({
-      ...current,
-      [name]: value,
-    }));
+    updateNamedValue(setReplicatorPatternForm, event);
   }
 
   function handleHolodeckProgramChange(event) {
-    const { name, value } = event.target;
-    setHolodeckProgramForm((current) => ({
-      ...current,
-      [name]: value,
-    }));
+    updateNamedValue(setHolodeckProgramForm, event);
   }
 
   function openReplicatorConsole(tab = 'newlog', logId = null) {
@@ -931,9 +464,14 @@ function App() {
   }
 
   async function openTransporterConsole(tab = 'newlog', eventId = null) {
+    let availableUnits = transporterUnits;
+    let availableLocations = transporterLocations;
+
     if (!transporterUnits.length || !transporterLocations.length) {
       try {
-        await refreshTransporterWorkspace();
+        const refreshData = await refreshTransporterWorkspace();
+        availableUnits = refreshData.unitData;
+        availableLocations = refreshData.locationData;
       } catch (loadError) {
         setError(loadError.message);
       }
@@ -941,8 +479,8 @@ function App() {
     if (tab === 'newlog') {
       setTransporterLogForm((current) => ({
         ...initialTransporterLogForm,
-        transporter_unit_id: current.transporter_unit_id || transporterUnits[0]?.unit_id || '',
-        ship_location_id: current.ship_location_id || transporterLocations[0]?.compartment_id || '',
+        transporter_unit_id: current.transporter_unit_id || availableUnits[0]?.unit_id || '',
+        ship_location_id: current.ship_location_id || availableLocations[0]?.compartment_id || '',
       }));
     }
     setShowTransporterConsole(true);
@@ -1023,324 +561,6 @@ function App() {
     }
   }
 
-  async function handleSubmit(event) {
-    event.preventDefault();
-
-    if (!selectedCrew) {
-      return;
-    }
-
-    setSubmitting(true);
-    setError('');
-    setSuccessMessage('');
-
-    try {
-      await apiFetch('/personnel-actions', {
-        method: 'POST',
-        body: JSON.stringify({
-          crew_id: selectedCrew.crew_id,
-          action_type: formState.action_type,
-          old_rank: selectedCrew.rank,
-          new_rank: formState.new_rank || selectedCrew.rank,
-          old_species: selectedCrew.species,
-          new_species: formState.new_species || selectedCrew.species,
-          old_planet_of_origin: selectedCrew.planet_of_origin,
-          new_planet_of_origin: formState.new_planet_of_origin || selectedCrew.planet_of_origin,
-          old_department_id: selectedCrew.department_id,
-          new_department_id: Number(formState.new_department_id || selectedCrew.department_id),
-          effective_stardate: formState.effective_stardate,
-          episode_reference: formState.episode_reference,
-          entered_by: formState.entered_by,
-          action_notes: formState.action_notes,
-        }),
-      });
-
-      const refreshedDetail = await refreshAfterAction(selectedCrew.crew_id);
-      setFormState((current) => ({
-        ...initialFormState,
-        entered_by: current.entered_by || initialFormState.entered_by,
-        new_rank: refreshedDetail.rank || '',
-        new_species: refreshedDetail.species || '',
-        new_planet_of_origin: refreshedDetail.planet_of_origin || '',
-        new_department_id: String(refreshedDetail.department_id || ''),
-      }));
-      setSuccessMessage('Personnel action logged to the current dossier.');
-    } catch (submitError) {
-      setError(submitError.message);
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  async function handleMedicalProfileSubmit(event) {
-    event.preventDefault();
-
-    if (!selectedMedicalChart) {
-      return;
-    }
-
-    setSubmittingMedical(true);
-    setError('');
-    setSuccessMessage('');
-
-    try {
-      await apiFetch('/medical/charts/profile', {
-        method: 'POST',
-        body: JSON.stringify({
-          crew_id: selectedMedicalChart.crew_id,
-          ...medicalProfileForm,
-        }),
-      });
-
-      await refreshMedicalChart(selectedMedicalChart.crew_id);
-      setSuccessMessage('Medical profile updated.');
-    } catch (submitError) {
-      setError(submitError.message);
-    } finally {
-      setSubmittingMedical(false);
-    }
-  }
-
-  async function handleMedicalRecordSubmit(event) {
-    event.preventDefault();
-
-    if (!selectedMedicalChart) {
-      return;
-    }
-
-    setSubmittingMedical(true);
-    setError('');
-    setSuccessMessage('');
-
-    try {
-      await apiFetch('/medical/charts/records', {
-        method: 'POST',
-        body: JSON.stringify({
-          crew_id: selectedMedicalChart.crew_id,
-          ...medicalRecordForm,
-        }),
-      });
-
-      await refreshMedicalChart(selectedMedicalChart.crew_id);
-      setMedicalRecordForm(initialMedicalRecordForm);
-      setMedicalTab('records');
-      setSuccessMessage('Medical log entry added to the chart.');
-    } catch (submitError) {
-      setError(submitError.message);
-    } finally {
-      setSubmittingMedical(false);
-    }
-  }
-
-  async function handleCrewCreateSubmit(event) {
-    event.preventDefault();
-    setSubmittingCrewCreate(true);
-    setError('');
-    setSuccessMessage('');
-
-    try {
-      const result = await apiFetch('/crew', {
-        method: 'POST',
-        body: JSON.stringify({
-          first_name: crewCreateForm.first_name,
-          last_name: crewCreateForm.last_name,
-          crew_rank: crewCreateForm.crew_rank || null,
-          birth_stardate: crewCreateForm.birth_stardate ? Number(crewCreateForm.birth_stardate) : null,
-          planet_of_origin: crewCreateForm.planet_of_origin || null,
-          species: crewCreateForm.species || null,
-          crew_designation: crewCreateForm.crew_designation,
-          service_number: crewCreateForm.service_number || null,
-          department_id: crewCreateForm.department_id ? Number(crewCreateForm.department_id) : null,
-        }),
-      });
-
-      const refreshedCrew = await apiFetch('/crew');
-      setCrew(refreshedCrew);
-      setReplicatorCrewOptions(refreshedCrew);
-      setSelectedCrewId(result.crew_id);
-      setCrewCreateForm(initialCrewCreateForm);
-      setShowCrewCreate(false);
-      setSuccessMessage('New crew record created.');
-    } catch (submitError) {
-      setError(submitError.message);
-    } finally {
-      setSubmittingCrewCreate(false);
-    }
-  }
-
-  async function handleReplicatorLogSubmit(event) {
-    event.preventDefault();
-
-    setSubmittingReplicator(true);
-    setError('');
-    setSuccessMessage('');
-
-    try {
-      const result = await apiFetch('/replicator/logs', {
-        method: 'POST',
-        body: JSON.stringify({
-          crew_id: Number(replicatorLogForm.crew_id),
-          replicator_unit_id: replicatorLogForm.replicator_unit_id,
-          pattern_id: Number(replicatorLogForm.pattern_id),
-          timestamp: replicatorLogForm.timestamp,
-        }),
-      });
-
-      await refreshReplicatorWorkspace();
-      setSelectedReplicatorLogId(result.log_id);
-      setReplicatorTab('detail');
-      setReplicatorLogForm(initialReplicatorLogForm);
-      setShowReplicatorConsole(true);
-      setSuccessMessage('Replicator usage event logged.');
-    } catch (submitError) {
-      setError(submitError.message);
-    } finally {
-      setSubmittingReplicator(false);
-    }
-  }
-
-  async function handleReplicatorPatternSubmit(event) {
-    event.preventDefault();
-
-    setSubmittingReplicatorPattern(true);
-    setError('');
-    setSuccessMessage('');
-
-    try {
-      const result = await apiFetch('/replicator/patterns', {
-        method: 'POST',
-        body: JSON.stringify({
-          pattern_name: replicatorPatternForm.pattern_name,
-          category: replicatorPatternForm.category || null,
-          origin_species: replicatorPatternForm.origin_species || null,
-          energy_cost: replicatorPatternForm.energy_cost ? Number(replicatorPatternForm.energy_cost) : null,
-          description: replicatorPatternForm.description || null,
-          last_updated_stardate: replicatorPatternForm.last_updated_stardate || null,
-        }),
-      });
-
-      await refreshReplicatorWorkspace();
-      setReplicatorPatternForm(initialReplicatorPatternForm);
-      setReplicatorLogForm((current) => ({
-        ...current,
-        pattern_id: String(result.pattern_id),
-      }));
-      setReplicatorTab('newlog');
-      setSuccessMessage('Replicator pattern added to the library.');
-    } catch (submitError) {
-      setError(submitError.message);
-    } finally {
-      setSubmittingReplicatorPattern(false);
-    }
-  }
-
-  async function handleTransporterLogSubmit(event) {
-    event.preventDefault();
-    setSubmittingTransporter(true);
-    setError('');
-    setSuccessMessage('');
-
-    try {
-      const selectedPassengerIds = transporterLogForm.passenger_crew_ids
-        .filter((crewId) => crewId)
-        .map((crewId) => Number(crewId));
-
-      if (!selectedPassengerIds.length) {
-        throw new Error('Select at least one passenger before logging a transport event.');
-      }
-
-      const payload = {
-        transporter_unit_id: transporterLogForm.transporter_unit_id,
-        operator_crew_id: transporterLogForm.operator_crew_id ? Number(transporterLogForm.operator_crew_id) : null,
-        stardate: transporterLogForm.stardate,
-        transport_direction: transporterLogForm.transport_direction,
-        ship_location_id: transporterLogForm.ship_location_id,
-        off_ship_location: transporterLogForm.off_ship_location || null,
-        passenger_crew_ids: selectedPassengerIds,
-      };
-
-      const result = await apiFetch('/transporter/logs', {
-        method: 'POST',
-        body: JSON.stringify(payload),
-      });
-
-      await refreshTransporterWorkspace();
-      setSelectedTransporterEventId(result.event_id);
-      setTransporterTab('detail');
-      setTransporterLogForm(initialTransporterLogForm);
-      setShowTransporterConsole(true);
-      setSuccessMessage('Transporter event logged.');
-    } catch (submitError) {
-      setError(submitError.message);
-    } finally {
-      setSubmittingTransporter(false);
-    }
-  }
-
-  async function handleHolodeckLogSubmit(event) {
-    event.preventDefault();
-    setSubmittingHolodeck(true);
-    setError('');
-    setSuccessMessage('');
-
-    try {
-      const result = await apiFetch('/holodeck/logs', {
-        method: 'POST',
-        body: JSON.stringify({
-          crew_id: Number(holodeckLogForm.crew_id),
-          holodeck_id: holodeckLogForm.holodeck_id,
-          program_id: holodeckLogForm.program_id,
-          stardate: holodeckLogForm.stardate,
-        }),
-      });
-
-      await refreshHolodeckWorkspace();
-      setSelectedHolodeckLogId(`user-${result.log_id}`);
-      setHolodeckTab('detail');
-      setHolodeckLogForm(initialHolodeckLogForm);
-      setShowHolodeckConsole(true);
-      setSuccessMessage('Holodeck session logged.');
-    } catch (submitError) {
-      setError(submitError.message);
-    } finally {
-      setSubmittingHolodeck(false);
-    }
-  }
-
-  async function handleHolodeckProgramSubmit(event) {
-    event.preventDefault();
-    setSubmittingHolodeckProgram(true);
-    setError('');
-    setSuccessMessage('');
-
-    try {
-      const result = await apiFetch('/holodeck/programs', {
-        method: 'POST',
-        body: JSON.stringify({
-          program_name: holodeckProgramForm.program_name,
-          holodeck_id: holodeckProgramForm.holodeck_id,
-          created_by: holodeckProgramForm.created_by || null,
-          access_level: holodeckProgramForm.access_level || null,
-          genre: holodeckProgramForm.genre || null,
-          description: holodeckProgramForm.description || null,
-        }),
-      });
-
-      await refreshHolodeckWorkspace();
-      setHolodeckProgramForm(initialHolodeckProgramForm);
-      setHolodeckLogForm((current) => ({
-        ...current,
-        program_id: result.program_id,
-      }));
-      setHolodeckTab('newlog');
-      setSuccessMessage('Holodeck program added to the library.');
-    } catch (submitError) {
-      setError(submitError.message);
-    } finally {
-      setSubmittingHolodeckProgram(false);
-    }
-  }
-
   const selectedDepartmentName = departments.find(
     (department) => String(department.department_id) === String(formState.new_department_id)
   )?.department_name;
@@ -1399,28 +619,7 @@ function App() {
   const totalSystemsPages = Math.max(1, Math.ceil(systemsCompartments.length / CREW_PAGE_SIZE));
   const safeSystemsPage = Math.min(systemsPage, totalSystemsPages);
   const pagedCompartments = systemsCompartments.slice((safeSystemsPage - 1) * CREW_PAGE_SIZE, safeSystemsPage * CREW_PAGE_SIZE);
-  const workspaceTitle = activeWorkspace === 'personnel'
-    ? 'Personnel Records and Change Log'
-    : activeWorkspace === 'medical'
-      ? 'Medical Charts and Treatment Logs'
-      : activeWorkspace === 'transporter'
-        ? 'Transporter Records and Pad Operations'
-      : activeWorkspace === 'replicator'
-        ? 'Replicator Usage Logs and Pattern Library'
-        : activeWorkspace === 'holodeck'
-          ? 'Holodeck Usage Records and Program Activity'
-        : 'Ship Systems and Installed Units';
-  const workspaceMode = activeWorkspace === 'personnel'
-    ? 'Episode Logging'
-    : activeWorkspace === 'medical'
-      ? 'Sickbay Charting'
-      : activeWorkspace === 'transporter'
-        ? 'Pad Operations'
-      : activeWorkspace === 'replicator'
-        ? 'Consumption Tracking'
-        : activeWorkspace === 'holodeck'
-          ? 'Program Tracking'
-        : 'Infrastructure Browsing';
+  const { title: workspaceTitle, mode: workspaceMode } = getWorkspaceMeta(activeWorkspace);
 
   if (authLoading) {
     return (
