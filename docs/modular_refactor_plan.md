@@ -18,18 +18,20 @@ Shared backend support has been moved into:
 
 The following API domains now have dedicated route modules:
 
+- `api/src/routes/auth.py`
 - `api/src/routes/crew.py`
 - `api/src/routes/medical.py`
 - `api/src/routes/transporters.py`
 - `api/src/routes/replicator.py`
 - `api/src/routes/holodeck.py`
+- `api/src/routes/systems.py`
 
 `api/src/main.py` now acts more like an app shell:
 
 - app creation
 - middleware setup
 - router mounting
-- remaining auth, systems, and portal-serving endpoints
+- remaining health, test, and portal-serving endpoints
 
 ## Why This Matters
 
@@ -44,10 +46,10 @@ Benefits already gained:
 
 ## Immediate Next Candidates
 
-The next logical backend slices are:
+The next logical backend slices are now smaller cleanup tasks:
 
-- `auth`
-- `systems`
+- shared schema and response cleanup
+- optional route-level tests for extracted domains
 
 After those, the next major concentration point is the frontend:
 

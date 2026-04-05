@@ -409,3 +409,79 @@ def get_crew_identity(user_id: int, crew_id: int):
         "department": department_row["department_name"] if department_row else None,
         "is_custom": False,
     }
+
+
+def get_consolidated_holodeck_usage_logs(user_id: int, compartment_id: Optional[str] = None):
+    canon_filters = []
+    canon_params = []
+    custom_filters = ["uhl.user_id = %s"]
+    custom_params = [user_id]
+
+    if compartment_id:
+        canon_filters.append("h.CompartmentID = %s")
+        canon_params.append(compartment_id)
+        custom_filters.append("h.CompartmentID = %s")
+        custom_params.append(compartment_id)
+
+    canon_where = f"WHERE {' AND '.join(canon_filters)}" if canon_filters else ""
+    custom_where = f"WHERE {' AND '.join(custom_filters)}"
+
+    canon_logs = fetch_all(
+        f"""
+        SELECT
+            hul.UsageLogID AS usage_log_id,
+            hul.CrewID AS crew_id,
+            hul.ProgramID AS program_id,
+            hul.HolodeckID AS holodeck_id,
+            hul.Stardate AS stardate,
+            hp.ProgramName AS program_name,
+            hp.CreatedBy AS created_by,
+            hp.Genre AS genre,
+            h.HolodeckDesignation AS holodeck_designation,
+            c.first_name AS first_name,
+            c.last_name AS last_name
+        FROM holodeckusagelog hul
+        INNER JOIN holodecks h
+            ON h.HolodeckID = hul.HolodeckID
+        INNER JOIN holodeckprograms hp
+            ON hp.ProgramID = hul.ProgramID
+        LEFT JOIN crew c
+            ON c.crew_id = hul.CrewID
+        {canon_where}
+        """,
+        tuple(canon_params),
+    )
+
+    custom_logs = []
+    if user_data_tables_exist():
+        custom_logs = fetch_all(
+            f"""
+            SELECT
+                CONCAT('UHL-', uhl.log_id) AS usage_log_id,
+                -ucc.custom_crew_id AS crew_id,
+                CONCAT('UHP-', up.program_id) AS program_id,
+                uhl.holodeck_id AS holodeck_id,
+                uhl.stardate AS stardate,
+                up.program_name AS program_name,
+                up.created_by AS created_by,
+                up.genre AS genre,
+                h.HolodeckDesignation AS holodeck_designation,
+                ucc.first_name AS first_name,
+                ucc.last_name AS last_name
+            FROM user_holodeck_logs uhl
+            INNER JOIN user_holodeck_programs up
+                ON up.program_id = uhl.program_id
+               AND up.user_id = uhl.user_id
+            INNER JOIN holodecks h
+                ON h.HolodeckID = uhl.holodeck_id
+            LEFT JOIN user_custom_crew ucc
+                ON ucc.custom_crew_id = uhl.crew_id
+               AND ucc.user_id = uhl.user_id
+            {custom_where}
+            """,
+            tuple(custom_params),
+        )
+
+    combined_logs = [*canon_logs, *custom_logs]
+    combined_logs.sort(key=lambda row: str(row["usage_log_id"]), reverse=True)
+    return combined_logs
