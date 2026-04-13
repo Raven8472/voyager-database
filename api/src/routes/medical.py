@@ -86,19 +86,20 @@ def get_medical_charts(search: Optional[str] = Query(default=None), current_user
             if source_crew_id is None:
                 continue
             resolved_crew_id = source_crew_id if "crew_id" in crew_member else -int(source_crew_id)
-            identity = get_crew_identity(current_user["user_id"], resolved_crew_id)
-            if not identity:
-                continue
+            first_name = crew_member.get("first_name")
+            last_name = crew_member.get("last_name")
+            birth_stardate = crew_member.get("birth_stardate")
+            species = crew_member.get("species")
             chart_rows.append(
                 {
-                    "crew_id": identity["crew_id"],
-                    "first_name": identity["first_name"],
-                    "last_name": identity["last_name"],
-                    "display_name": build_display_name(identity["first_name"], identity["last_name"]),
-                    "birth_stardate": identity["birth_stardate"],
-                    "species": identity["species"],
-                    "profile_exists": bool(profile_map.get(identity["crew_id"])),
-                    "record_count": int(record_count_map.get(identity["crew_id"], 0)),
+                    "crew_id": resolved_crew_id,
+                    "first_name": first_name,
+                    "last_name": last_name,
+                    "display_name": build_display_name(first_name, last_name),
+                    "birth_stardate": birth_stardate,
+                    "species": species,
+                    "profile_exists": bool(profile_map.get(resolved_crew_id)),
+                    "record_count": int(record_count_map.get(resolved_crew_id, 0)),
                 }
             )
         return chart_rows
@@ -221,7 +222,19 @@ def upsert_medical_profile(profile: MedicalProfileUpsert, current_user=Depends(g
                 ),
             )
 
-        return {"status": "ok", "profile_id": profile_id, "crew_id": profile.crew_id}
+        return {
+            "status": "ok",
+            "profile_id": profile_id,
+            "crew_id": profile.crew_id,
+            "medical_profile": {
+                "profile_id": profile_id,
+                "crew_id": profile.crew_id,
+                "blood_type": profile.blood_type,
+                "allergies": profile.allergies,
+                "chronic_conditions": profile.chronic_conditions,
+                "emergency_contact": profile.emergency_contact,
+            },
+        }
     except HTTPException:
         raise
     except Exception as e:
@@ -257,7 +270,19 @@ def create_medical_record(record: MedicalRecordCreate, current_user=Depends(get_
             ),
         )
 
-        return {"status": "ok", "record_id": record_id, "crew_id": record.crew_id}
+        return {
+            "status": "ok",
+            "record_id": record_id,
+            "crew_id": record.crew_id,
+            "medical_record": {
+                "record_id": record_id,
+                "crew_id": record.crew_id,
+                "visit_stardate": record.visit_stardate,
+                "reason_for_visit": record.reason_for_visit,
+                "treatment_provided": record.treatment_provided,
+                "follow_up_required": record.follow_up_required,
+            },
+        }
     except HTTPException:
         raise
     except Exception as e:

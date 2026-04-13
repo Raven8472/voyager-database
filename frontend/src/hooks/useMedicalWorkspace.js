@@ -17,19 +17,40 @@ export function useMedicalWorkspace({
   setSelectedMedicalChart,
   setSelectedMedicalCrewId,
 }) {
-  const refreshMedicalChart = useCallback(async (crewId) => {
-    const params = new URLSearchParams();
-    if (medicalSearch.trim()) {
-      params.set('search', medicalSearch.trim());
-    }
-
-    const [detail, chartData] = await Promise.all([
-      apiFetch(`/medical/charts/${crewId}`),
-      apiFetch(`/medical/charts${params.toString() ? `?${params.toString()}` : ''}`),
-    ]);
+  const refreshMedicalChart = useCallback(async (crewId, options = {}) => {
+    const { reloadList = false } = options;
+    const detail = await apiFetch(`/medical/charts/${crewId}`);
 
     setSelectedMedicalChart(detail);
-    setMedicalCharts(chartData);
+
+    if (reloadList) {
+      const params = new URLSearchParams();
+      if (medicalSearch.trim()) {
+        params.set('search', medicalSearch.trim());
+      }
+
+      const chartData = await apiFetch(`/medical/charts${params.toString() ? `?${params.toString()}` : ''}`);
+      setMedicalCharts(chartData);
+      return detail;
+    }
+
+    setMedicalCharts((currentCharts) =>
+      currentCharts.map((chart) =>
+        chart.crew_id === detail.crew_id
+          ? {
+              ...chart,
+              first_name: detail.first_name,
+              last_name: detail.last_name,
+              display_name: detail.display_name,
+              birth_stardate: detail.birth_stardate,
+              species: detail.species,
+              profile_exists: Boolean(detail.medical_profile),
+              record_count: detail.medical_records.length,
+            }
+          : chart
+      )
+    );
+
     return detail;
   }, [apiFetch, medicalSearch, setMedicalCharts, setSelectedMedicalChart]);
 

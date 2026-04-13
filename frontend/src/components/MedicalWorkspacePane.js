@@ -35,7 +35,7 @@ function MedicalWorkspacePane({
   const [loadingMedicalDetail, setLoadingMedicalDetail] = useState(false);
   const [submittingMedical, setSubmittingMedical] = useState(false);
 
-  const { refreshMedicalChart } = useMedicalWorkspace({
+  useMedicalWorkspace({
     apiFetch,
     currentUser,
     initialMedicalRecordForm,
@@ -60,6 +60,26 @@ function MedicalWorkspacePane({
     (safeMedicalPage - 1) * CREW_PAGE_SIZE,
     safeMedicalPage * CREW_PAGE_SIZE
   );
+
+  function patchMedicalChart(nextChart) {
+    setSelectedMedicalChart(nextChart);
+    setMedicalCharts((currentCharts) =>
+      currentCharts.map((chart) =>
+        chart.crew_id === nextChart.crew_id
+          ? {
+              ...chart,
+              first_name: nextChart.first_name,
+              last_name: nextChart.last_name,
+              display_name: nextChart.display_name,
+              birth_stardate: nextChart.birth_stardate,
+              species: nextChart.species,
+              profile_exists: Boolean(nextChart.medical_profile),
+              record_count: nextChart.medical_records.length,
+            }
+          : chart
+      )
+    );
+  }
 
   function handleMedicalProfileChange(event) {
     updateNamedValue(setMedicalProfileForm, event);
@@ -91,7 +111,7 @@ function MedicalWorkspacePane({
     setSuccessMessage('');
 
     try {
-      await apiFetch('/medical/charts/profile', {
+      const result = await apiFetch('/medical/charts/profile', {
         method: 'POST',
         body: JSON.stringify({
           crew_id: selectedMedicalChart.crew_id,
@@ -99,7 +119,10 @@ function MedicalWorkspacePane({
         }),
       });
 
-      await refreshMedicalChart(selectedMedicalChart.crew_id);
+      patchMedicalChart({
+        ...selectedMedicalChart,
+        medical_profile: result.medical_profile,
+      });
       setSuccessMessage('Medical profile updated.');
     } catch (submitError) {
       setError(submitError.message);
@@ -120,7 +143,7 @@ function MedicalWorkspacePane({
     setSuccessMessage('');
 
     try {
-      await apiFetch('/medical/charts/records', {
+      const result = await apiFetch('/medical/charts/records', {
         method: 'POST',
         body: JSON.stringify({
           crew_id: selectedMedicalChart.crew_id,
@@ -128,7 +151,10 @@ function MedicalWorkspacePane({
         }),
       });
 
-      await refreshMedicalChart(selectedMedicalChart.crew_id);
+      patchMedicalChart({
+        ...selectedMedicalChart,
+        medical_records: [result.medical_record, ...selectedMedicalChart.medical_records],
+      });
       setMedicalRecordForm(initialMedicalRecordForm);
       setMedicalTab('records');
       setSuccessMessage('Medical log entry added to the chart.');
