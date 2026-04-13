@@ -10,6 +10,7 @@ export function useAuthBootstrap({
   setDepartments,
   setError,
   setHealth,
+  setReplicatorCrewOptions,
   setRecentActions,
 }) {
   useEffect(() => {
@@ -42,19 +43,21 @@ export function useAuthBootstrap({
       }
 
       try {
-        const [healthData, departmentData, actionData] = await Promise.all([
+        const [healthData, departmentData, actionData, crewData] = await Promise.all([
           apiFetch('/health'),
           apiFetch('/departments'),
           apiFetch('/personnel-actions/recent'),
+          apiFetch('/crew'),
         ]);
         setHealth(healthData);
         setDepartments(departmentData);
         setRecentActions(actionData);
+        setReplicatorCrewOptions(crewData);
       } catch (loadError) {
         setError(loadError.message);
       }
     }
 
     loadMeta();
-  }, [apiFetch, authToken, setDepartments, setError, setHealth, setRecentActions]);
+  }, [apiFetch, authToken, setDepartments, setError, setHealth, setRecentActions, setReplicatorCrewOptions]);
 }

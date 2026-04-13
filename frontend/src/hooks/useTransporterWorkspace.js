@@ -6,7 +6,6 @@ export function useTransporterWorkspace({
   selectedTransporterEventId,
   setError,
   setLoadingTransporter,
-  setReplicatorCrewOptions,
   setSelectedTransporterEvent,
   setSelectedTransporterEventId,
   setTransporterLocations,
@@ -22,21 +21,18 @@ export function useTransporterWorkspace({
       params.set('search', transporterSearch.trim());
     }
 
-    const [logData, unitData, locationData, crewData] = await Promise.all([
+    const [logData, unitData, locationData] = await Promise.all([
       apiFetch(`/transporter/logs${params.toString() ? `?${params.toString()}` : ''}`),
       apiFetch('/transporter/units'),
       apiFetch('/transporter/locations'),
-      apiFetch('/crew'),
     ]);
 
     setTransporterLogs(logData);
     setTransporterUnits(unitData);
     setTransporterLocations(locationData);
-    setReplicatorCrewOptions(crewData);
-    return { logData, unitData, locationData, crewData };
+    return { logData, unitData, locationData };
   }, [
     apiFetch,
-    setReplicatorCrewOptions,
     setTransporterLocations,
     setTransporterLogs,
     setTransporterUnits,
@@ -59,19 +55,14 @@ export function useTransporterWorkspace({
       }
 
       try {
-        const [logResult, unitResult, locationResult, crewResult] = await Promise.allSettled([
+        const [logResult, unitResult, locationResult] = await Promise.allSettled([
           apiFetch(`/transporter/logs${params.toString() ? `?${params.toString()}` : ''}`),
           apiFetch('/transporter/units'),
           apiFetch('/transporter/locations'),
-          apiFetch('/crew'),
         ]);
 
         if (logResult.status === 'fulfilled') {
           setTransporterLogs(logResult.value);
-          if (selectedTransporterEventId && !logResult.value.some((event) => event.event_id === selectedTransporterEventId)) {
-            setSelectedTransporterEventId(null);
-            setSelectedTransporterEvent(null);
-          }
         } else {
           setTransporterLogs([]);
           setError(logResult.reason.message);
@@ -90,12 +81,6 @@ export function useTransporterWorkspace({
           setTransporterLocations([]);
           setError(locationResult.reason.message);
         }
-
-        if (crewResult.status === 'fulfilled') {
-          setReplicatorCrewOptions(crewResult.value);
-        } else {
-          setError(crewResult.reason.message);
-        }
       } finally {
         setLoadingTransporter(false);
       }
@@ -105,12 +90,8 @@ export function useTransporterWorkspace({
   }, [
     apiFetch,
     currentUser,
-    selectedTransporterEventId,
     setError,
     setLoadingTransporter,
-    setReplicatorCrewOptions,
-    setSelectedTransporterEvent,
-    setSelectedTransporterEventId,
     setTransporterLocations,
     setTransporterLogs,
     setTransporterUnits,
@@ -120,6 +101,22 @@ export function useTransporterWorkspace({
   useEffect(() => {
     setTransporterPage(1);
   }, [setTransporterPage, transporterSearch]);
+
+  useEffect(() => {
+    if (!selectedTransporterEventId) {
+      return;
+    }
+
+    if (!transporterLogs.some((event) => event.event_id === selectedTransporterEventId)) {
+      setSelectedTransporterEventId(null);
+      setSelectedTransporterEvent(null);
+    }
+  }, [
+    selectedTransporterEventId,
+    setSelectedTransporterEvent,
+    setSelectedTransporterEventId,
+    transporterLogs,
+  ]);
 
   useEffect(() => {
     if (!selectedTransporterEventId) {

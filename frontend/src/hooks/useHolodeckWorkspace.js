@@ -11,7 +11,6 @@ export function useHolodeckWorkspace({
   setHolodeckPrograms,
   setHolodeckUnits,
   setLoadingHolodeck,
-  setReplicatorCrewOptions,
   setSelectedHolodeckLog,
   setSelectedHolodeckLogId,
   setHolodeckLogs,
@@ -22,26 +21,23 @@ export function useHolodeckWorkspace({
       params.set('search', holodeckSearch.trim());
     }
 
-    const [logData, programData, unitData, crewData] = await Promise.all([
+    const [logData, programData, unitData] = await Promise.all([
       apiFetch(`/holodeck/logs${params.toString() ? `?${params.toString()}` : ''}`),
       apiFetch(`/holodeck/programs${params.toString() ? `?${params.toString()}` : ''}`),
       apiFetch('/holodeck/units'),
-      apiFetch('/crew'),
     ]);
 
     setHolodeckLogs(logData);
     setHolodeckPrograms(programData);
     setHolodeckUnits(unitData);
-    setReplicatorCrewOptions(crewData);
 
-    return { logData, programData, unitData, crewData };
+    return { logData, programData, unitData };
   }, [
     apiFetch,
     holodeckSearch,
     setHolodeckLogs,
     setHolodeckPrograms,
     setHolodeckUnits,
-    setReplicatorCrewOptions,
   ]);
 
   useEffect(() => {
@@ -55,12 +51,7 @@ export function useHolodeckWorkspace({
       setError('');
 
       try {
-        const { logData } = await refreshHolodeckWorkspace();
-
-        if (selectedHolodeckLogId && !logData.some((log) => log.log_id === selectedHolodeckLogId)) {
-          setSelectedHolodeckLogId(null);
-          setSelectedHolodeckLog(null);
-        }
+        await refreshHolodeckWorkspace();
       } catch (loadError) {
         setError(loadError.message);
       } finally {
@@ -72,16 +63,29 @@ export function useHolodeckWorkspace({
   }, [
     currentUser,
     refreshHolodeckWorkspace,
-    selectedHolodeckLogId,
     setError,
     setLoadingHolodeck,
-    setSelectedHolodeckLog,
-    setSelectedHolodeckLogId,
   ]);
 
   useEffect(() => {
     setHolodeckPage(1);
   }, [holodeckSearch, setHolodeckPage]);
+
+  useEffect(() => {
+    if (!selectedHolodeckLogId) {
+      return;
+    }
+
+    if (!holodeckLogs.some((log) => log.log_id === selectedHolodeckLogId)) {
+      setSelectedHolodeckLogId(null);
+      setSelectedHolodeckLog(null);
+    }
+  }, [
+    holodeckLogs,
+    selectedHolodeckLogId,
+    setSelectedHolodeckLog,
+    setSelectedHolodeckLogId,
+  ]);
 
   useEffect(() => {
     if (!selectedHolodeckLogId) {

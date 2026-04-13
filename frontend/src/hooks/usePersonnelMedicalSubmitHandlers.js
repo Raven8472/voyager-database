@@ -6,18 +6,11 @@ export function usePersonnelMedicalSubmitHandlers({
   handleSetSuccess,
   initialCrewCreateForm,
   initialFormState,
-  initialMedicalRecordForm,
-  medicalProfileForm,
-  medicalRecordForm,
-  refreshMedicalChart,
   selectedCrew,
-  selectedMedicalChart,
   setCrew,
   setCrewCreateForm,
   setFormState,
   setHealth,
-  setMedicalRecordForm,
-  setMedicalTab,
   setRecentActions,
   setReplicatorCrewOptions,
   setSelectedCrew,
@@ -25,21 +18,20 @@ export function usePersonnelMedicalSubmitHandlers({
   setShowCrewCreate,
   setSubmitting,
   setSubmittingCrewCreate,
-  setSubmittingMedical,
 }) {
   async function refreshAfterAction(crewId) {
-    const [detail, actionData, healthData] = await Promise.all([
+    const [detail, actionData, healthData, crewData] = await Promise.all([
       apiFetch(`/crew/${crewId}`),
       apiFetch('/personnel-actions/recent'),
       apiFetch('/health'),
+      apiFetch('/crew'),
     ]);
 
     setSelectedCrew(detail);
     setRecentActions(actionData);
     setHealth(healthData);
-
-    const crewData = await apiFetch('/crew');
     setCrew(crewData);
+    setReplicatorCrewOptions(crewData);
     return detail;
   }
 
@@ -92,66 +84,6 @@ export function usePersonnelMedicalSubmitHandlers({
     }
   }
 
-  async function handleMedicalProfileSubmit(event) {
-    event.preventDefault();
-
-    if (!selectedMedicalChart) {
-      return;
-    }
-
-    setSubmittingMedical(true);
-    handleSetError('');
-    handleSetSuccess('');
-
-    try {
-      await apiFetch('/medical/charts/profile', {
-        method: 'POST',
-        body: JSON.stringify({
-          crew_id: selectedMedicalChart.crew_id,
-          ...medicalProfileForm,
-        }),
-      });
-
-      await refreshMedicalChart(selectedMedicalChart.crew_id);
-      handleSetSuccess('Medical profile updated.');
-    } catch (submitError) {
-      handleSetError(submitError.message);
-    } finally {
-      setSubmittingMedical(false);
-    }
-  }
-
-  async function handleMedicalRecordSubmit(event) {
-    event.preventDefault();
-
-    if (!selectedMedicalChart) {
-      return;
-    }
-
-    setSubmittingMedical(true);
-    handleSetError('');
-    handleSetSuccess('');
-
-    try {
-      await apiFetch('/medical/charts/records', {
-        method: 'POST',
-        body: JSON.stringify({
-          crew_id: selectedMedicalChart.crew_id,
-          ...medicalRecordForm,
-        }),
-      });
-
-      await refreshMedicalChart(selectedMedicalChart.crew_id);
-      setMedicalRecordForm(initialMedicalRecordForm);
-      setMedicalTab('records');
-      handleSetSuccess('Medical log entry added to the chart.');
-    } catch (submitError) {
-      handleSetError(submitError.message);
-    } finally {
-      setSubmittingMedical(false);
-    }
-  }
-
   async function handleCrewCreateSubmit(event) {
     event.preventDefault();
     setSubmittingCrewCreate(true);
@@ -190,8 +122,6 @@ export function usePersonnelMedicalSubmitHandlers({
 
   return {
     handleCrewCreateSubmit,
-    handleMedicalProfileSubmit,
-    handleMedicalRecordSubmit,
     handleSubmit,
   };
 }

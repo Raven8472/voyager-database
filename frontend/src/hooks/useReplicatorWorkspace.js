@@ -8,7 +8,6 @@ export function useReplicatorWorkspace({
   selectedReplicatorLogId,
   setError,
   setLoadingReplicator,
-  setReplicatorCrewOptions,
   setReplicatorLogs,
   setReplicatorPage,
   setReplicatorPatternPage,
@@ -23,22 +22,19 @@ export function useReplicatorWorkspace({
       params.set('search', replicatorSearch.trim());
     }
 
-    const [logData, patternData, unitData, crewData] = await Promise.all([
+    const [logData, patternData, unitData] = await Promise.all([
       apiFetch(`/replicator/logs${params.toString() ? `?${params.toString()}` : ''}`),
       apiFetch(`/replicator/patterns${params.toString() ? `?${params.toString()}` : ''}`),
       apiFetch(`/replicator/units${params.toString() ? `?${params.toString()}` : ''}`),
-      apiFetch('/crew'),
     ]);
 
     setReplicatorLogs(logData);
     setReplicatorPatterns(patternData);
     setReplicatorUnits(unitData);
-    setReplicatorCrewOptions(crewData);
-    return { logData, patternData, unitData, crewData };
+    return { logData, patternData, unitData };
   }, [
     apiFetch,
     replicatorSearch,
-    setReplicatorCrewOptions,
     setReplicatorLogs,
     setReplicatorPatterns,
     setReplicatorUnits,
@@ -55,11 +51,7 @@ export function useReplicatorWorkspace({
       setError('');
 
       try {
-        const { logData } = await refreshReplicatorWorkspace();
-        if (selectedReplicatorLogId && !logData.some((log) => log.log_id === selectedReplicatorLogId)) {
-          setSelectedReplicatorLogId(null);
-          setSelectedReplicatorLog(null);
-        }
+        await refreshReplicatorWorkspace();
       } catch (loadError) {
         setError(loadError.message);
       } finally {
@@ -71,11 +63,8 @@ export function useReplicatorWorkspace({
   }, [
     currentUser,
     refreshReplicatorWorkspace,
-    selectedReplicatorLogId,
     setError,
     setLoadingReplicator,
-    setSelectedReplicatorLog,
-    setSelectedReplicatorLogId,
   ]);
 
   useEffect(() => {
@@ -85,6 +74,22 @@ export function useReplicatorWorkspace({
   useEffect(() => {
     setReplicatorPatternPage(1);
   }, [replicatorSearch, setReplicatorPatternPage]);
+
+  useEffect(() => {
+    if (!selectedReplicatorLogId) {
+      return;
+    }
+
+    if (!replicatorLogs.some((log) => log.log_id === selectedReplicatorLogId)) {
+      setSelectedReplicatorLogId(null);
+      setSelectedReplicatorLog(null);
+    }
+  }, [
+    replicatorLogs,
+    selectedReplicatorLogId,
+    setSelectedReplicatorLog,
+    setSelectedReplicatorLogId,
+  ]);
 
   useEffect(() => {
     if (!selectedReplicatorLogId) {
