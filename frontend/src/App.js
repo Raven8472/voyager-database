@@ -220,7 +220,6 @@ function App() {
     apiFetch,
     currentUser,
     initialMedicalRecordForm,
-    medicalCharts,
     medicalSearch,
     selectedMedicalCrewId,
     setError,
@@ -257,8 +256,8 @@ function App() {
     handleTransporterLogSubmit,
   } = useActivitySubmitHandlers({
     apiFetch,
-    handleSetError: setError,
-    handleSetSuccess: setSuccessMessage,
+    setError,
+    setSuccessMessage,
     holodeckLogForm,
     holodeckProgramForm,
     initialHolodeckLogForm,

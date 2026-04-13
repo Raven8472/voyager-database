@@ -55,10 +55,7 @@ export function useHolodeckWorkspace({
       setError('');
 
       try {
-        const { logData, programData, unitData, crewData } = await refreshHolodeckWorkspace();
-        setHolodeckPrograms(programData);
-        setHolodeckUnits(unitData);
-        setReplicatorCrewOptions(crewData);
+        const { logData } = await refreshHolodeckWorkspace();
 
         if (selectedHolodeckLogId && !logData.some((log) => log.log_id === selectedHolodeckLogId)) {
           setSelectedHolodeckLogId(null);
@@ -77,10 +74,7 @@ export function useHolodeckWorkspace({
     refreshHolodeckWorkspace,
     selectedHolodeckLogId,
     setError,
-    setHolodeckPrograms,
-    setHolodeckUnits,
     setLoadingHolodeck,
-    setReplicatorCrewOptions,
     setSelectedHolodeckLog,
     setSelectedHolodeckLogId,
   ]);

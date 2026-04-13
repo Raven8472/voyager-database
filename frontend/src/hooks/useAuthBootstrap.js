@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { AUTH_STORAGE_KEY } from '../lib/constants';
 
 export function useAuthBootstrap({
   apiFetch,
@@ -22,7 +23,7 @@ export function useAuthBootstrap({
         const authData = await apiFetch('/auth/me');
         setCurrentUser(authData.user);
       } catch (loadError) {
-        window.localStorage.removeItem('voyager_auth_token');
+        window.localStorage.removeItem(AUTH_STORAGE_KEY);
         setAuthToken('');
         setCurrentUser(null);
         setError(loadError.message);

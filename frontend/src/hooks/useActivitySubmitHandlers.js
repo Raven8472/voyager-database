@@ -1,7 +1,7 @@
 export function useActivitySubmitHandlers({
   apiFetch,
-  handleSetError,
-  handleSetSuccess,
+  setError,
+  setSuccessMessage,
   holodeckLogForm,
   holodeckProgramForm,
   initialHolodeckLogForm,
@@ -39,8 +39,8 @@ export function useActivitySubmitHandlers({
     event.preventDefault();
 
     setSubmittingReplicator(true);
-    handleSetError('');
-    handleSetSuccess('');
+    setError('');
+    setSuccessMessage('');
 
     try {
       const result = await apiFetch('/replicator/logs', {
@@ -58,9 +58,9 @@ export function useActivitySubmitHandlers({
       setReplicatorTab('detail');
       setReplicatorLogForm(initialReplicatorLogForm);
       setShowReplicatorConsole(true);
-      handleSetSuccess('Replicator usage event logged.');
+      setSuccessMessage('Replicator usage event logged.');
     } catch (submitError) {
-      handleSetError(submitError.message);
+      setError(submitError.message);
     } finally {
       setSubmittingReplicator(false);
     }
@@ -70,8 +70,8 @@ export function useActivitySubmitHandlers({
     event.preventDefault();
 
     setSubmittingReplicatorPattern(true);
-    handleSetError('');
-    handleSetSuccess('');
+    setError('');
+    setSuccessMessage('');
 
     try {
       const result = await apiFetch('/replicator/patterns', {
@@ -93,9 +93,9 @@ export function useActivitySubmitHandlers({
         pattern_id: String(result.pattern_id),
       }));
       setReplicatorTab('newlog');
-      handleSetSuccess('Replicator pattern added to the library.');
+      setSuccessMessage('Replicator pattern added to the library.');
     } catch (submitError) {
-      handleSetError(submitError.message);
+      setError(submitError.message);
     } finally {
       setSubmittingReplicatorPattern(false);
     }
@@ -104,8 +104,8 @@ export function useActivitySubmitHandlers({
   async function handleTransporterLogSubmit(event) {
     event.preventDefault();
     setSubmittingTransporter(true);
-    handleSetError('');
-    handleSetSuccess('');
+    setError('');
+    setSuccessMessage('');
 
     try {
       const selectedPassengerIds = transporterLogForm.passenger_crew_ids
@@ -136,9 +136,9 @@ export function useActivitySubmitHandlers({
       setTransporterTab('detail');
       setTransporterLogForm(initialTransporterLogForm);
       setShowTransporterConsole(true);
-      handleSetSuccess('Transporter event logged.');
+      setSuccessMessage('Transporter event logged.');
     } catch (submitError) {
-      handleSetError(submitError.message);
+      setError(submitError.message);
     } finally {
       setSubmittingTransporter(false);
     }
@@ -147,8 +147,8 @@ export function useActivitySubmitHandlers({
   async function handleHolodeckLogSubmit(event) {
     event.preventDefault();
     setSubmittingHolodeck(true);
-    handleSetError('');
-    handleSetSuccess('');
+    setError('');
+    setSuccessMessage('');
 
     try {
       const result = await apiFetch('/holodeck/logs', {
@@ -166,9 +166,9 @@ export function useActivitySubmitHandlers({
       setHolodeckTab('detail');
       setHolodeckLogForm(initialHolodeckLogForm);
       setShowHolodeckConsole(true);
-      handleSetSuccess('Holodeck session logged.');
+      setSuccessMessage('Holodeck session logged.');
     } catch (submitError) {
-      handleSetError(submitError.message);
+      setError(submitError.message);
     } finally {
       setSubmittingHolodeck(false);
     }
@@ -177,8 +177,8 @@ export function useActivitySubmitHandlers({
   async function handleHolodeckProgramSubmit(event) {
     event.preventDefault();
     setSubmittingHolodeckProgram(true);
-    handleSetError('');
-    handleSetSuccess('');
+    setError('');
+    setSuccessMessage('');
 
     try {
       const result = await apiFetch('/holodeck/programs', {
@@ -200,9 +200,9 @@ export function useActivitySubmitHandlers({
         program_id: result.program_id,
       }));
       setHolodeckTab('newlog');
-      handleSetSuccess('Holodeck program added to the library.');
+      setSuccessMessage('Holodeck program added to the library.');
     } catch (submitError) {
-      handleSetError(submitError.message);
+      setError(submitError.message);
     } finally {
       setSubmittingHolodeckProgram(false);
     }

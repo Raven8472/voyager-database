@@ -4,7 +4,6 @@ export function useMedicalWorkspace({
   apiFetch,
   currentUser,
   initialMedicalRecordForm,
-  medicalCharts,
   medicalSearch,
   selectedMedicalCrewId,
   setError,
