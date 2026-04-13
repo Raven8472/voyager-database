@@ -27,10 +27,6 @@ Authentication is enabled in V1, and user-created records are stored in dedicate
 
 ## Screenshots
 
-### Personnel Workspace
-
-![Personnel workspace](docs/screenshots/personnel-workspace.png)
-
 ### Ship Systems Workspace
 
 ![Ship Systems workspace](docs/screenshots/ship-systems-workspace.png)
